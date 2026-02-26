@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>草野球管理アプリ</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <nav id="main-nav">
+        <div class="nav-item active" data-target="team-page">チーム情報</div>
+        <div class="nav-item" data-target="game-page">試合入力</div>
+        <div class="nav-item" data-target="stats-page">成績表示</div>
+    </nav>
+
+    <main>
+        <section id="team-page" class="content-section active">
+            <h3>チーム情報</h3>
+            <div class="card">
+                <div class="form-group">
+                    <label>チーム名:</label>
+                    <input type="text" id="team-name-input" placeholder="チーム名">
+                </div>
+                <div class="form-group">
+                    <label>監督名:</label>
+                    <input type="text" id="manager-name-input" placeholder="監督名">
+                </div>
+            </div>
+
+            <div class="list-header">
+                <h3>選手一覧</h3>
+                <button class="btn-add" onclick="showAddPlayerModal()">選手登録</button>
+            </div>
+            
+            <div class="table-container">
+                <table id="player-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>氏名</th>
+                            <th>投打</th>
+                            <th>守備</th>
+                        </tr>
+                    </thead>
+                    <tbody id="player-list-body"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="game-page" class="content-section">
+            <h2>試合情報・スコア入力</h2>
+            <p>準備中...</p>
+        </section>
+
+        <section id="stats-page" class="content-section">
+            <h2>通算成績</h2>
+            <p>準備中...</p>
+        </section>
+    </main>
+
+    <div id="modal-overlay" onclick="closeModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <span class="close-btn" onclick="closeModal()">&times;</span>
+            <h2 id="modal-title">タイトル</h2>
+            <div id="modal-body">
+                </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
