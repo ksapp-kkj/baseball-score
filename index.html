@@ -9,15 +9,23 @@
 <body>
 
     <nav id="main-nav">
-        <div class="nav-item active" data-target="team-page">チーム情報</div>
-        <div class="nav-item" data-target="game-page">試合入力</div>
-        <div class="nav-item" data-target="stats-page">成績表示</div>
+        <div class="nav-title">野球スコア管理</div>
+        
+        <div class="nav-menu">
+            <div class="nav-item active" data-target="team-page">チーム情報</div>
+            <div class="nav-item" data-target="game-page">試合情報</div>
+            <div class="nav-item" data-target="score-page">スコア入力</div>
+            <div class="nav-item" data-target="stats-page">成績表示</div>
+        </div>
     </nav>
 
     <main>
         <section id="team-page" class="content-section active">
-            <h3>チーム情報</h3>
+            <h2>チーム情報</h2>
             <div class="card">
+                <h3>基本情報</h3>
+                <div id="team-record" class="record-badge">0勝 0敗 0分</div>
+                
                 <div class="form-group">
                     <label>チーム名:</label>
                     <input type="text" id="team-name-input" placeholder="チーム名">
@@ -25,6 +33,10 @@
                 <div class="form-group">
                     <label>監督名:</label>
                     <input type="text" id="manager-name-input" placeholder="監督名">
+                </div>
+                <div class="form-group">
+                    <label>主将名:</label>
+                    <input type="text" id="captain-name-input" placeholder="主将名">
                 </div>
             </div>
 
@@ -43,19 +55,35 @@
                             <th>守備</th>
                         </tr>
                     </thead>
-                    <tbody id="player-list-body"></tbody>
+                    <tbody id="player-list-body">
+                        </tbody>
                 </table>
             </div>
         </section>
 
         <section id="game-page" class="content-section">
-            <h2>試合情報・スコア入力</h2>
-            <p>準備中...</p>
+            <div class="list-header">
+                <h2>試合管理</h2>
+                <button class="btn-add" onclick="showAddGameModal()">新規試合登録</button>
+            </div>
+            
+            <div id="game-list-container">
+                <p class="empty-message">試合が登録されていません</p>
+            </div>
+        </section>
+
+        <section id="score-page" class="content-section">
+            <h2>スコア入力</h2>
+            <div id="score-game-list-container">
+                <p class="empty-message">試合が登録されていません</p>
+            </div>
         </section>
 
         <section id="stats-page" class="content-section">
             <h2>通算成績</h2>
-            <p>準備中...</p>
+            <div class="card">
+                <p>個人成績・チーム統計は現在準備中です。</p>
+            </div>
         </section>
     </main>
 
@@ -63,6 +91,7 @@
         <div class="modal-content" onclick="event.stopPropagation()">
             <span class="close-btn" onclick="closeModal()">&times;</span>
             <h2 id="modal-title">タイトル</h2>
+            <hr>
             <div id="modal-body">
                 </div>
         </div>
