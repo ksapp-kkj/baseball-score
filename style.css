@@ -257,7 +257,6 @@ th {
     font-size: 1.2rem;
 }
 
-/* 試合カード内のボタン調整 */
 .game-card-btns {
     display: flex;
     gap: 10px;
@@ -267,10 +266,6 @@ th {
 .game-card-btns button {
     padding: 8px;
     font-size: 0.85rem;
-}
-
-.game-card-btns .btn-edit-mode,
-.game-card-btns .btn-score {
     flex: 1;
 }
 
@@ -334,7 +329,6 @@ th {
     margin-right: 6px;
 }
 
-/* 完了チェックボックス用 */
 .chk-finished {
     width: 20px !important;
 }
@@ -353,7 +347,7 @@ th {
 }
 
 /**
- * 追加：イニングスコアボード用のスタイル
+ * イニングスコアボード
  */
 .score-table-container {
     overflow-x: auto;
@@ -406,7 +400,7 @@ th {
 }
 
 /**
- * 追加：スタメン・打順設定用のスタイル
+ * スタメン・打順設定
  */
 .lineup-row {
     display: flex;
@@ -444,4 +438,38 @@ th {
     padding: 8px 12px;
     cursor: pointer;
     font-weight: bold;
+}
+
+/**
+ * 🌟 追加：打席成績（マトリックス）入力
+ */
+.atbat-table th {
+    min-width: 60px;
+}
+
+.atbat-cell {
+    min-width: 65px;
+    height: 45px;
+    cursor: pointer;
+    background: #fafafa;
+    font-size: 0.85rem;
+    transition: background 0.2s;
+    line-height: 1.2;
+}
+
+.atbat-cell:hover {
+    background: #e0e0e0;
+}
+
+.atbat-cell.filled {
+    background: #e8f5e9;
+    font-weight: bold;
+    color: var(--grass-green);
+}
+
+.rbi-text {
+    color: #d32f2f;
+    font-size: 0.75rem;
+    display: block;
+    margin-top: 2px;
 }
