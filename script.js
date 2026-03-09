@@ -9,7 +9,11 @@ let games = JSON.parse(localStorage.getItem('baseball_games')) || [];
 let currentEditingPlayerId = null;
 let currentGameForScore = null;
 let tempLineup = []; 
-let currentAtBatColumns = 5; // 打席マトリックスの表示列数
+let currentAtBatColumns = 5; 
+let currentStatsYear = "all"; 
+let currentRecordYear = "all";
+let tempParticipants = [];
+let tempPitchers = []; // 🌟 追加：投手成績の一時保存用
 
 /**
  * 起動時の処理
@@ -18,6 +22,7 @@ window.onload = function() {
     renderPlayerList();
     renderGameList();
     updateTeamRecord();
+    renderStatsPage(); 
     
     const teamFields = [
         { id: 'team-name-input', key: 'team_name' },
@@ -36,6 +41,7 @@ window.onload = function() {
     });
     
     setupNavigation();
+    setupBackupUI();
 };
 
 /**
@@ -53,6 +59,7 @@ function setupNavigation() {
             sections.forEach(sec => {
                 sec.classList.toggle('active', sec.id === target);
             });
+            if (target === 'stats-page') renderStatsPage();
         });
     });
 }
@@ -269,10 +276,16 @@ function renderPlayerList() {
  */
 function showAddGameModal(gameId = null) {
     const isEdit = gameId !== null;
+    
+    const allPlayerIds = players.map(p => String(p.id));
+
     const g = isEdit ? games.find(game => game.id === gameId) : {
         date: new Date().toISOString().split('T')[0],
-        opponent: "", location: "", weather: "晴れ", side: "先攻"
+        opponent: "", location: "", weather: "晴れ", side: "先攻", 
+        participants: allPlayerIds
     };
+
+    tempParticipants = g.participants ? [...g.participants] : allPlayerIds;
 
     document.getElementById('modal-title').innerText = isEdit ? "試合情報の編集" : "新規試合登録";
     document.getElementById('modal-body').innerHTML = `
@@ -280,23 +293,74 @@ function showAddGameModal(gameId = null) {
             <label>試合日:</label> <input type="date" id="g-date" value="${g.date}">
             <label>対戦相手:</label> <input type="text" id="g-opponent" value="${g.opponent}" placeholder="相手チーム名">
             <label>球場:</label> <input type="text" id="g-location" value="${g.location}" placeholder="球場名">
+            
             <label>天気:</label>
             <select id="g-weather">
                 <option value="晴れ" ${g.weather==='晴れ'?'selected':''}>☀️ 晴れ</option>
                 <option value="曇り" ${g.weather==='曇り'?'selected':''}>☁️ 曇り</option>
                 <option value="雨" ${g.weather==='雨'?'selected':''}>☔ 雨</option>
             </select>
+            
             <label>自チーム攻守:</label>
             <select id="g-side">
                 <option value="先攻" ${g.side==='先攻'?'selected':''}>先攻</option>
                 <option value="後攻" ${g.side==='後攻'?'selected':''}>後攻</option>
             </select>
-            <div class="modal-btns">
+
+            <label style="margin-top: 10px; border-top: 1px dashed #ccc; padding-top: 10px;">当日の参加者:</label>
+            <p style="font-size: 0.8rem; color: #666; margin: 0 0 10px 0;">※デフォルトで全選手が登録されています。欠席者を「✖」で外してください。</p>
+            
+            <div style="display:flex; gap:8px;">
+                <select id="g-participant-select" style="flex:1;"></select>
+                <button type="button" class="btn-edit-mode" style="padding: 8px 16px; font-size: 0.9rem;" onclick="addParticipant()">追加</button>
+            </div>
+            <div id="g-participants-list" style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px;"></div>
+
+            <div class="modal-btns" style="margin-top: 20px;">
                 <button class="btn-save" onclick="processGame(${gameId})">${isEdit ? '変更を保存する' : '試合を作成する'}</button>
             </div>
         </div>
     `;
+    
+    renderParticipants();
     document.getElementById('modal-overlay').style.display = 'flex';
+}
+
+function renderParticipants() {
+    const selectEl = document.getElementById('g-participant-select');
+    const listEl = document.getElementById('g-participants-list');
+
+    let optionsHtml = `<option value="">-- 追加する選手を選択 --</option>`;
+    players.forEach(p => {
+        if (!tempParticipants.includes(String(p.id))) {
+            optionsHtml += `<option value="${p.id}">[${p.number === "無" ? "無" : '#' + p.number}] ${p.name}</option>`;
+        }
+    });
+    selectEl.innerHTML = optionsHtml;
+
+    if (tempParticipants.length === 0) {
+        listEl.innerHTML = '<span style="font-size:0.85rem; color:#999;">参加者がいません</span>';
+    } else {
+        listEl.innerHTML = tempParticipants.map(pid => {
+            const p = players.find(pl => String(pl.id) === String(pid));
+            if (!p) return '';
+            return `<span class="participant-badge">${p.name} <span class="participant-remove" onclick="removeParticipant('${pid}')">&times;</span></span>`;
+        }).join('');
+    }
+}
+
+function addParticipant() {
+    const selectEl = document.getElementById('g-participant-select');
+    const pid = selectEl.value;
+    if (pid) {
+        tempParticipants.push(String(pid));
+        renderParticipants();
+    }
+}
+
+function removeParticipant(pid) {
+    tempParticipants = tempParticipants.filter(id => id !== String(pid));
+    renderParticipants();
 }
 
 function processGame(gameId) {
@@ -311,9 +375,11 @@ function processGame(gameId) {
         location: document.getElementById('g-location').value || "未定",
         weather: document.getElementById('g-weather').value,
         side: document.getElementById('g-side').value,
+        participants: tempParticipants,
         score: gameId ? games.find(x => x.id === gameId).score : { us: 0, them: 0 },
         innings: gameId ? games.find(x => x.id === gameId).innings : Array(9).fill().map(() => ({ us: "", them: "" })),
         lineup: gameId ? (games.find(x => x.id === gameId).lineup || []) : [],
+        pitchers: gameId ? (games.find(x => x.id === gameId).pitchers || []) : [], // 🌟 追加：投手データ
         isFinished: gameId ? games.find(x => x.id === gameId).isFinished : false
     };
 
@@ -341,9 +407,12 @@ function renderGameList() {
         return;
     }
 
-    container.innerHTML = games.map(g => {
+    const sortedGames = [...games].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    container.innerHTML = sortedGames.map(g => {
         const resultText = g.isFinished ? (g.score.us > g.score.them ? ' (勝)' : g.score.us < g.score.them ? ' (敗)' : ' (分)') : ' (未完了)';
         const weatherIcon = g.weather === '晴れ' ? '☀️' : g.weather === '曇り' ? '☁️' : g.weather === '雨' ? '☔' : '❓';
+        const pCount = g.participants ? g.participants.length : 0; 
         
         return `
             <div class="game-card">
@@ -351,7 +420,7 @@ function renderGameList() {
                     <h4>vs ${g.opponent}</h4>
                     <span class="weather-icon">${weatherIcon}</span>
                 </div>
-                <p>📅 ${g.date} (${g.side}) | 📍 ${g.location}</p>
+                <p>📅 ${g.date} (${g.side}) | 📍 ${g.location} | 👥 参加: ${pCount}名</p>
                 <p class="score-text">スコア: ${g.score.us} - ${g.score.them}${resultText}</p>
                 
                 <div class="game-card-btns" style="margin-top: 15px;">
@@ -365,9 +434,8 @@ function renderGameList() {
             </div>`;
     }).join('');
 
-    // 🌟 修正：「スコア入力」タブに「打席成績」ボタンを追加
     if(scoreContainer) {
-        scoreContainer.innerHTML = games.map(g => {
+        scoreContainer.innerHTML = sortedGames.map(g => {
             const weatherIcon = g.weather === '晴れ' ? '☀️' : g.weather === '曇り' ? '☁️' : g.weather === '雨' ? '☔' : '❓';
             return `
             <div class="game-card">
@@ -378,9 +446,12 @@ function renderGameList() {
                 <p>📅 ${g.date} | 📍 ${g.location}</p>
                 <p class="score-text large">スコア: ${g.score.us} - ${g.score.them}</p>
                 
-                <div class="game-card-btns" style="margin-top: 15px;">
-                    <button class="btn-score" style="background:#4caf50;" onclick="showScoreInputModal(${g.id})">スコアボード</button>
-                    <button class="btn-score" style="background:#ff9800;" onclick="showAtBatMatrixModal(${g.id})">打席成績を入力</button>
+                <div style="display:flex; flex-direction:column; gap:10px; margin-top:15px;">
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn-score" style="background:#4caf50; flex:1;" onclick="showScoreInputModal(${g.id})">スコアボード</button>
+                        <button class="btn-score" style="background:#ff9800; flex:1;" onclick="showAtBatMatrixModal(${g.id})">打席成績を入力</button>
+                    </div>
+                    <button class="btn-score" style="background:#673ab7;" onclick="showPitcherModal(${g.id})">投手成績を入力</button>
                 </div>
             </div>`;
         }).join('');
@@ -423,14 +494,27 @@ function renderLineupRows() {
         
         row.innerHTML = `
             <span class="lineup-order">${index + 1}.</span>
+            
             <select class="lineup-player-select" onchange="updateTempLineup(${index}, 'playerId', this.value)">
                 <option value="">-- 選手 --</option>
-                ${players.map(p => `<option value="${p.id}" ${String(p.id) === String(item.playerId) ? 'selected' : ''}>[${p.number === "無" ? "無" : '#' + p.number}] ${p.name}</option>`).join('')}
+                ${players.map(p => {
+                    const isSelectedElsewhere = tempLineup.some((t, i) => i !== index && String(t.playerId) === String(p.id));
+                    if (isSelectedElsewhere) return ''; 
+                    return `<option value="${p.id}" ${String(p.id) === String(item.playerId) ? 'selected' : ''}>[${p.number === "無" ? "無" : '#' + p.number}] ${p.name}</option>`;
+                }).join('')}
             </select>
+            
             <select class="lineup-pos-select" onchange="updateTempLineup(${index}, 'position', this.value)">
                 <option value="">位置</option>
-                ${lineupPositionOptions.map(pos => `<option value="${pos}" ${pos === item.position ? 'selected' : ''}>${pos}</option>`).join('')}
+                ${lineupPositionOptions.map(pos => {
+                    if (pos !== "EH" && pos !== "ベンチ") {
+                        const isPosSelectedElsewhere = tempLineup.some((t, i) => i !== index && t.position === pos);
+                        if (isPosSelectedElsewhere) return '';
+                    }
+                    return `<option value="${pos}" ${pos === item.position ? 'selected' : ''}>${pos}</option>`;
+                }).join('')}
             </select>
+            
             <button class="btn-remove-row" onclick="removeLineupRow(${index})">✖</button>
         `;
         wrapper.appendChild(row);
@@ -439,6 +523,9 @@ function renderLineupRows() {
 
 function updateTempLineup(index, key, value) {
     tempLineup[index][key] = value;
+    if (key === 'playerId' || key === 'position') {
+        renderLineupRows();
+    }
 }
 
 function addLineupRow() {
@@ -453,7 +540,6 @@ function removeLineupRow(index) {
 
 function saveLineup() {
     const filteredLineup = tempLineup.filter(item => item.playerId !== "");
-    // データ互換性（過去データにresults配列がなければ追加）
     filteredLineup.forEach(item => { if (!item.results) item.results = []; });
     
     currentGameForScore.lineup = filteredLineup;
@@ -462,7 +548,109 @@ function saveLineup() {
 }
 
 /**
- * 🌟 新規フェーズ4：打席成績（スコアブック型マトリックス）入力機能
+ * 🌟 新規追加：投手成績入力機能
+ */
+function showPitcherModal(gameId) {
+    currentGameForScore = games.find(g => g.id === gameId);
+    if (!currentGameForScore.pitchers) currentGameForScore.pitchers = [];
+    
+    tempPitchers = JSON.parse(JSON.stringify(currentGameForScore.pitchers));
+    
+    if (tempPitchers.length === 0) {
+        tempPitchers.push({ playerId: "", innings: "", outs: "0", er: "", so: "", bb: "" });
+    }
+
+    document.getElementById('modal-title').innerText = `投手成績 (vs ${currentGameForScore.opponent})`;
+    document.getElementById('modal-body').innerHTML = `
+        <div class="edit-form">
+            <p style="font-size: 0.8rem; color: #666; margin-bottom:10px;">登板した投手の成績を入力してください。</p>
+            <div id="pitcher-wrapper"></div>
+            <button class="btn-edit-mode" style="padding: 6px; font-size: 0.9rem; margin-top: 10px; background:#4caf50;" onclick="addPitcherRow()">＋ 投手を登録</button>
+            <div class="modal-btns">
+                <button class="btn-save" onclick="savePitchers()">投手成績を保存</button>
+            </div>
+        </div>
+    `;
+    renderPitcherRows();
+    document.getElementById('modal-overlay').style.display = 'flex';
+}
+
+function renderPitcherRows() {
+    const wrapper = document.getElementById('pitcher-wrapper');
+    wrapper.innerHTML = "";
+
+    tempPitchers.forEach((item, index) => {
+        const row = document.createElement('div');
+        row.className = "pitcher-row";
+        
+        row.innerHTML = `
+            <div style="margin-bottom:8px; display:flex; gap:8px;">
+                <select style="flex:1; padding:8px;" onchange="updatePitcher(${index}, 'playerId', this.value)">
+                    <option value="">-- 投手を選択 --</option>
+                    ${players.map(p => {
+                        const isSelected = tempPitchers.some((t, i) => i !== index && String(t.playerId) === String(p.id));
+                        if (isSelected) return ''; 
+                        return `<option value="${p.id}" ${String(p.id) === String(item.playerId) ? 'selected' : ''}>[${p.number === "無" ? "無" : '#' + p.number}] ${p.name}</option>`;
+                    }).join('')}
+                </select>
+                <button class="btn-remove-row" onclick="removePitcherRow(${index})">✖</button>
+            </div>
+            
+            <div class="pitcher-grid">
+                <div>
+                    <label>投球回</label>
+                    <input type="number" min="0" value="${item.innings}" placeholder="回" oninput="updatePitcher(${index}, 'innings', this.value)">
+                </div>
+                <div>
+                    <label>アウト</label>
+                    <select onchange="updatePitcher(${index}, 'outs', this.value)">
+                        <option value="0" ${item.outs == 0 ? 'selected':''}>0/3</option>
+                        <option value="1" ${item.outs == 1 ? 'selected':''}>1/3</option>
+                        <option value="2" ${item.outs == 2 ? 'selected':''}>2/3</option>
+                    </select>
+                </div>
+                <div>
+                    <label>自責点</label>
+                    <input type="number" min="0" value="${item.er}" placeholder="点" oninput="updatePitcher(${index}, 'er', this.value)">
+                </div>
+                <div>
+                    <label>奪三振</label>
+                    <input type="number" min="0" value="${item.so}" placeholder="個" oninput="updatePitcher(${index}, 'so', this.value)">
+                </div>
+                <div>
+                    <label>四死球</label>
+                    <input type="number" min="0" value="${item.bb}" placeholder="個" oninput="updatePitcher(${index}, 'bb', this.value)">
+                </div>
+            </div>
+        `;
+        wrapper.appendChild(row);
+    });
+}
+
+function updatePitcher(index, key, value) {
+    tempPitchers[index][key] = value;
+    if (key === 'playerId') renderPitcherRows();
+}
+
+function addPitcherRow() {
+    tempPitchers.push({ playerId: "", innings: "", outs: "0", er: "", so: "", bb: "" });
+    renderPitcherRows();
+}
+
+function removePitcherRow(index) {
+    tempPitchers.splice(index, 1);
+    renderPitcherRows();
+}
+
+function savePitchers() {
+    const filtered = tempPitchers.filter(item => item.playerId !== "");
+    currentGameForScore.pitchers = filtered;
+    saveAndRefreshGames();
+    closeModal();
+}
+
+/**
+ * 打席成績入力機能（🌟 走るアイコンの削除）
  */
 function showAtBatMatrixModal(gameId) {
     currentGameForScore = games.find(g => g.id === gameId);
@@ -475,7 +663,6 @@ function showAtBatMatrixModal(gameId) {
 
     g.lineup.forEach(item => { if (!item.results) item.results = []; });
 
-    // 一番打席数が多い選手に合わせて表の横幅（列数）を自動調整（最低5打席）
     let maxCols = 5;
     g.lineup.forEach(item => {
         if (item.results.length >= maxCols) maxCols = item.results.length + 1;
@@ -502,11 +689,12 @@ function renderAtBatMatrix() {
             const resData = item.results[atBatIdx];
             const text = resData && resData.result ? resData.result : "";
             const rbiText = resData && resData.rbi > 0 ? `<span class="rbi-text">${resData.rbi}打点</span>` : "";
+            // 🌟 修正：アイコン（🏃）を削除しました
+            const stealText = resData && resData.steal > 0 ? `<span class="steal-text">${resData.steal}盗</span>` : "";
             const isFilled = text !== "" ? "filled" : "";
             
-            // タップすると入力画面(openAtBatInput)が開く
             colsHtml += `<td class="atbat-cell ${isFilled}" onclick="openAtBatInput(${lineIdx}, ${atBatIdx})">
-                            ${text}${rbiText}
+                            ${text}${rbiText}${stealText}
                          </td>`;
         }
 
@@ -553,7 +741,7 @@ function openAtBatInput(lineIdx, atBatIdx) {
     const player = players.find(p => String(p.id) === String(item.playerId));
     const pName = player ? player.name : "不明";
 
-    const currentRes = item.results[atBatIdx] || { result: "", rbi: 0 };
+    const currentRes = item.results[atBatIdx] || { result: "", rbi: 0, steal: 0 };
     const resultOptions = ['', '単打', '二塁打', '三塁打', '本塁打', '四死球', '三振', '内野ゴロ', '内野フライ', '外野フライ', 'エラー出塁', '犠打・犠飛'];
     
     document.getElementById('modal-title').innerText = `第${atBatIdx+1}打席: ${pName}`;
@@ -564,13 +752,24 @@ function openAtBatInput(lineIdx, atBatIdx) {
                 ${resultOptions.map(opt => `<option value="${opt}" ${currentRes.result === opt ? 'selected' : ''}>${opt === '' ? '-- 選択してください --' : opt}</option>`).join('')}
             </select>
 
-            <label>打点:</label>
-            <select id="ab-rbi" style="font-size:1.1rem; padding:12px;">
-                ${[0,1,2,3,4].map(n => `<option value="${n}" ${Number(currentRes.rbi) === n ? 'selected' : ''}>${n}</option>`).join('')}
-            </select>
+            <div style="display:flex; gap:10px; margin-top: 10px;">
+                <div style="flex:1;">
+                    <label>打点:</label>
+                    <select id="ab-rbi" style="font-size:1.1rem; padding:12px; width:100%;">
+                        ${[0,1,2,3,4].map(n => `<option value="${n}" ${Number(currentRes.rbi) === n ? 'selected' : ''}>${n}</option>`).join('')}
+                    </select>
+                </div>
+                <div style="flex:1;">
+                    <label>盗塁:</label>
+                    <select id="ab-steal" style="font-size:1.1rem; padding:12px; width:100%;">
+                        ${[0,1,2,3,4].map(n => `<option value="${n}" ${Number(currentRes.steal) === n ? 'selected' : ''}>${n}</option>`).join('')}
+                    </select>
+                </div>
+            </div>
 
             <div class="modal-btns" style="margin-top:20px;">
-                <button class="btn-save" onclick="saveAtBatInput(${lineIdx}, ${atBatIdx})">決定して表に戻る</button>
+                <button class="btn-save" style="background:#1976d2;" onclick="saveAndNextAtBat(${lineIdx}, ${atBatIdx})">決定して次の打者へ ➡</button>
+                <button class="btn-save" style="background:#4caf50;" onclick="saveAtBatInput(${lineIdx}, ${atBatIdx})">決定して表に戻る</button>
                 <button class="btn-delete" onclick="clearAtBatInput(${lineIdx}, ${atBatIdx})">この打席を空欄にする</button>
                 <button class="btn-edit-mode" style="background:#999;" onclick="renderAtBatMatrix()">キャンセル</button>
             </div>
@@ -578,23 +777,48 @@ function openAtBatInput(lineIdx, atBatIdx) {
     `;
 }
 
+function saveAndNextAtBat(lineIdx, atBatIdx) {
+    const res = document.getElementById('ab-result').value;
+    const rbi = document.getElementById('ab-rbi').value;
+    const steal = document.getElementById('ab-steal').value; 
+    
+    currentGameForScore.lineup[lineIdx].results[atBatIdx] = { result: res, rbi: Number(rbi), steal: Number(steal) };
+    saveAndRefreshGames();
+    
+    let nextLine = lineIdx + 1;
+    let nextAtBat = atBatIdx;
+    
+    if (nextLine >= currentGameForScore.lineup.length) {
+        nextLine = 0;
+        nextAtBat++;
+    }
+    
+    if (nextAtBat >= currentAtBatColumns) {
+        currentAtBatColumns++;
+    }
+    
+    renderAtBatMatrix(); 
+    openAtBatInput(nextLine, nextAtBat);
+}
+
 function saveAtBatInput(lineIdx, atBatIdx) {
     const res = document.getElementById('ab-result').value;
     const rbi = document.getElementById('ab-rbi').value;
+    const steal = document.getElementById('ab-steal').value; 
 
-    currentGameForScore.lineup[lineIdx].results[atBatIdx] = { result: res, rbi: Number(rbi) };
+    currentGameForScore.lineup[lineIdx].results[atBatIdx] = { result: res, rbi: Number(rbi), steal: Number(steal) };
     saveAndRefreshGames();
     renderAtBatMatrix(); 
 }
 
 function clearAtBatInput(lineIdx, atBatIdx) {
-    currentGameForScore.lineup[lineIdx].results[atBatIdx] = { result: "", rbi: 0 };
+    currentGameForScore.lineup[lineIdx].results[atBatIdx] = { result: "", rbi: 0, steal: 0 };
     saveAndRefreshGames();
     renderAtBatMatrix();
 }
 
 /**
- * イニングスコアボード機能（変更なし）
+ * イニングスコアボード機能
  */
 function showScoreInputModal(gameId) {
     currentGameForScore = games.find(game => game.id === gameId);
@@ -670,17 +894,345 @@ function deleteGame(id) {
 }
 
 /**
- * 共通・集計処理
+ * データ管理（バックアップ・復元）
+ */
+function setupBackupUI() {
+    const teamPage = document.getElementById('team-page');
+    if (!teamPage) return;
+
+    const backupDiv = document.createElement('div');
+    backupDiv.className = 'card';
+    backupDiv.style.marginTop = '20px';
+    backupDiv.innerHTML = `
+        <h3>データ管理</h3>
+        <p style="font-size: 0.85rem; color: #666;">機種変更時やデータ紛失に備えて、定期的にバックアップを保存してください。</p>
+        <div style="display: flex; gap: 10px; margin-top: 15px;">
+            <button class="btn-score" style="background:#1976d2; flex: 1; padding: 10px; font-size: 0.9rem;" onclick="exportData()">📥 バックアップを保存</button>
+            <label class="btn-edit-mode" style="background:#ff9800; flex: 1; text-align: center; cursor: pointer; padding: 10px; font-size: 0.9rem; border-radius: 8px; color: white; font-weight: bold;">
+                📤 データを復元する
+                <input type="file" accept=".json" style="display: none;" onchange="importData(event)">
+            </label>
+        </div>
+    `;
+    teamPage.appendChild(backupDiv);
+}
+
+function exportData() {
+    const data = {
+        players: localStorage.getItem('baseball_players'),
+        games: localStorage.getItem('baseball_games'),
+        team_name: localStorage.getItem('team_name'),
+        manager_name: localStorage.getItem('manager_name'),
+        captain_name: localStorage.getItem('captain_name')
+    };
+    const jsonStr = JSON.stringify(data);
+    const blob = new Blob([jsonStr], {type: "application/json"});
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `baseball_backup_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    
+    URL.revokeObjectURL(url);
+}
+
+function importData(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    if(!confirm("現在のデータはすべて上書きされます。復元を実行してもよろしいですか？")) {
+        event.target.value = '';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data = JSON.parse(e.target.result);
+            
+            if (data.players) localStorage.setItem('baseball_players', data.players);
+            if (data.games) localStorage.setItem('baseball_games', data.games);
+            if (data.team_name !== undefined) localStorage.setItem('team_name', data.team_name);
+            if (data.manager_name !== undefined) localStorage.setItem('manager_name', data.manager_name);
+            if (data.captain_name !== undefined) localStorage.setItem('captain_name', data.captain_name);
+            
+            alert('データの復元が完了しました！ページを再読み込みします。');
+            location.reload(); 
+        } catch (error) {
+            alert('ファイルの読み込みに失敗しました。正しいバックアップファイル（.json）を選択してください。');
+        }
+    };
+    reader.readAsText(file);
+}
+
+/**
+ * 🌟 チーム成績・個人成績（打撃＆投手）の集計
  */
 function updateTeamRecord() {
+    const el = document.getElementById('team-record');
+    if(!el) return;
+
+    const finishedGames = games.filter(g => g.isFinished);
+    const years = [...new Set(finishedGames.map(g => g.date.substring(0, 4)))].sort((a, b) => b - a);
+
+    let selectEl = document.getElementById('record-year-select');
+    if (!selectEl) {
+        selectEl = document.createElement('select');
+        selectEl.id = 'record-year-select';
+        selectEl.style.marginBottom = '10px';
+        selectEl.style.display = 'block';
+        selectEl.style.width = '150px';
+        selectEl.style.padding = '8px';
+        selectEl.style.borderRadius = '6px';
+        selectEl.style.border = '1px solid #ddd';
+        selectEl.onchange = function() {
+            currentRecordYear = this.value;
+            updateTeamRecord();
+        };
+        el.parentNode.insertBefore(selectEl, el);
+    }
+
+    selectEl.innerHTML = `<option value="all" ${currentRecordYear==='all'?'selected':''}>通算成績</option>` +
+        years.map(y => `<option value="${y}" ${currentRecordYear===String(y)?'selected':''}>${y}年度</option>`).join('');
+
     let wins = 0, losses = 0, draws = 0;
-    games.filter(g => g.isFinished).forEach(g => {
+    finishedGames.forEach(g => {
+        if(currentRecordYear !== "all" && g.date.substring(0, 4) !== currentRecordYear) return;
         if(g.score.us > g.score.them) wins++;
         else if(g.score.us < g.score.them) losses++;
         else draws++;
     });
-    const el = document.getElementById('team-record');
-    if(el) el.innerText = `${wins}勝 ${losses}敗 ${draws}分`;
+    
+    el.innerText = `${wins}勝 ${losses}敗 ${draws}分`;
+}
+
+function changeStatsYear(year) {
+    currentStatsYear = year;
+    renderStatsPage();
+}
+
+function renderStatsPage() {
+    const statsContainer = document.querySelector('#stats-page .card');
+    if (!statsContainer) return;
+
+    const finishedGames = games.filter(g => g.isFinished);
+    const years = [...new Set(finishedGames.map(g => g.date.substring(0, 4)))].sort((a, b) => b - a);
+
+    let yearOptionsHtml = `<option value="all" ${currentStatsYear === 'all' ? 'selected' : ''}>通算成績</option>`;
+    years.forEach(y => {
+        yearOptionsHtml += `<option value="${y}" ${currentStatsYear === String(y) ? 'selected' : ''}>${y}年度</option>`;
+    });
+
+    const filterHtml = `
+        <div style="margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
+            <label style="font-weight: bold; color: var(--grass-green);">表示シーズン:</label>
+            <select id="stats-year-select" style="width: auto; padding: 8px; font-size: 1rem; flex: 1;" onchange="changeStatsYear(this.value)">
+                ${yearOptionsHtml}
+            </select>
+        </div>
+    `;
+
+    const targetGames = finishedGames.filter(g => {
+        if (currentStatsYear === "all") return true;
+        return g.date.substring(0, 4) === currentStatsYear;
+    });
+
+    // 打者用・投手用の箱を用意
+    const playerStats = {};
+    const pitcherStats = {};
+    players.forEach(p => {
+        playerStats[p.id] = {
+            name: p.name, number: p.number === "無" ? "-" : p.number,
+            games: 0, pa: 0, ab: 0, hits: 0, hr: 0, rbi: 0, sb: 0, bb: 0, so: 0
+        };
+        pitcherStats[p.id] = {
+            name: p.name, number: p.number === "無" ? "-" : p.number,
+            games: 0, outs: 0, er: 0, so: 0, bb: 0
+        };
+    });
+
+    targetGames.forEach(g => {
+        // 打撃成績の集計
+        if (g.lineup) {
+            g.lineup.forEach(item => {
+                const pid = item.playerId;
+                if (!pid || !playerStats[pid]) return;
+                let playedInGame = false;
+                item.results.forEach(res => {
+                    if (!res.result) return;
+                    playedInGame = true;
+                    playerStats[pid].pa++; 
+                    playerStats[pid].rbi += (res.rbi || 0); 
+                    playerStats[pid].sb += (res.steal || 0);
+
+                    const r = res.result;
+                    if (['単打', '二塁打', '三塁打', '本塁打'].includes(r)) {
+                        playerStats[pid].ab++; 
+                        playerStats[pid].hits++; 
+                        if (r === '本塁打') playerStats[pid].hr++;
+                    } else if (['三振', '内野ゴロ', '内野フライ', '外野フライ', 'エラー出塁'].includes(r)) {
+                        playerStats[pid].ab++; 
+                        if (r === '三振') playerStats[pid].so++;
+                    } else if (r === '四死球') {
+                        playerStats[pid].bb++; 
+                    }
+                });
+                if (playedInGame) playerStats[pid].games++; 
+            });
+        }
+        
+        // 🌟 投手成績の集計
+        if (g.pitchers) {
+            g.pitchers.forEach(item => {
+                const pid = item.playerId;
+                if (!pid || !pitcherStats[pid]) return;
+                
+                pitcherStats[pid].games++;
+                // アウト数を計算（1回 = 3アウト）
+                const totalOuts = (parseInt(item.innings) || 0) * 3 + (parseInt(item.outs) || 0);
+                pitcherStats[pid].outs += totalOuts;
+                pitcherStats[pid].er += (parseInt(item.er) || 0);
+                pitcherStats[pid].so += (parseInt(item.so) || 0);
+                pitcherStats[pid].bb += (parseInt(item.bb) || 0);
+            });
+        }
+    });
+
+    // 🌟 打率の計算
+    let bStatsArray = Object.values(playerStats).map(s => {
+        if (s.ab > 0) {
+            let avgNum = s.hits / s.ab;
+            s.avg = avgNum === 1 ? "1.000" : avgNum.toFixed(3).replace(/^0\./, '.'); 
+        } else {
+            s.avg = ".000";
+        }
+        return s;
+    });
+
+    // 🌟 防御率（ERA）の計算 ※草野球標準の「7イニング制」で計算
+    let pStatsArray = Object.values(pitcherStats).map(s => {
+        // 表示用の投球回（例: 2回 1/3）
+        let innFull = Math.floor(s.outs / 3);
+        let innRem = s.outs % 3;
+        s.ipDisplay = innRem > 0 ? `${innFull} ${innRem}/3` : `${innFull}`;
+
+        if (s.outs > 0) {
+            // 防御率 = (自責点 × 7 × 3) ÷ 総アウト数
+            s.era = ((s.er * 7 * 3) / s.outs).toFixed(2);
+        } else {
+            s.era = "-";
+        }
+        return s;
+    });
+
+    if (currentStatsYear !== "all") {
+        bStatsArray = bStatsArray.filter(s => s.games > 0);
+        pStatsArray = pStatsArray.filter(s => s.games > 0);
+    } else {
+        // 通算の場合は、1度も出ていない人は隠す
+        bStatsArray = bStatsArray.filter(s => s.pa > 0 || s.games > 0);
+        pStatsArray = pStatsArray.filter(s => s.outs > 0 || s.games > 0);
+    }
+
+    bStatsArray.sort((a, b) => {
+        const avgA = parseFloat(a.avg) || 0;
+        const avgB = parseFloat(b.avg) || 0;
+        if (avgB !== avgA) return avgB - avgA;
+        return b.pa - a.pa;
+    });
+
+    // 防御率は低い順に並べる（0は除く）
+    pStatsArray.sort((a, b) => {
+        const eraA = a.era === "-" ? 999 : parseFloat(a.era);
+        const eraB = b.era === "-" ? 999 : parseFloat(b.era);
+        return eraA - eraB;
+    });
+
+    let html = filterHtml;
+
+    html += `<h3 style="color:var(--grass-green); margin-top:10px;">打撃成績</h3>`;
+    html += `
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>背番</th>
+                        <th style="text-align:left;">氏名</th>
+                        <th>打率</th>
+                        <th>試合</th>
+                        <th>打席</th>
+                        <th>打数</th>
+                        <th>安打</th>
+                        <th>本塁打</th>
+                        <th>打点</th>
+                        <th>盗塁</th>
+                        <th>四死球</th>
+                        <th>三振</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${bStatsArray.map(s => `
+                        <tr>
+                            <td>${s.number}</td>
+                            <td style="text-align:left; font-weight:bold;">${s.name}</td>
+                            <td style="font-weight:bold; color:var(--grass-green); font-size:1.1rem;">${s.avg}</td>
+                            <td>${s.games}</td>
+                            <td>${s.pa}</td>
+                            <td>${s.ab}</td>
+                            <td>${s.hits}</td>
+                            <td>${s.hr}</td>
+                            <td>${s.rbi}</td>
+                            <td>${s.sb}</td>
+                            <td>${s.bb}</td>
+                            <td>${s.so}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    // 🌟 投手成績の表を追加
+    html += `<h3 style="color:var(--grass-green); margin-top:25px;">投手成績</h3>`;
+    if (pStatsArray.length === 0) {
+        html += `<p style="font-size:0.85rem; color:#666;">投手記録がありません。</p>`;
+    } else {
+        html += `
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>背番</th>
+                            <th style="text-align:left;">氏名</th>
+                            <th>防御率</th>
+                            <th>登板</th>
+                            <th>投球回</th>
+                            <th>自責点</th>
+                            <th>奪三振</th>
+                            <th>四死球</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${pStatsArray.map(s => `
+                            <tr>
+                                <td>${s.number}</td>
+                                <td style="text-align:left; font-weight:bold;">${s.name}</td>
+                                <td style="font-weight:bold; color:#1976d2; font-size:1.1rem;">${s.era}</td>
+                                <td>${s.games}</td>
+                                <td>${s.ipDisplay}</td>
+                                <td>${s.er}</td>
+                                <td>${s.so}</td>
+                                <td>${s.bb}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    statsContainer.innerHTML = html;
 }
 
 function saveAndRefreshPlayers() {
@@ -691,6 +1243,7 @@ function saveAndRefreshPlayers() {
 function saveAndRefreshGames() {
     localStorage.setItem('baseball_games', JSON.stringify(games));
     renderGameList();
+    renderStatsPage(); 
 }
 
 function closeModal() {
