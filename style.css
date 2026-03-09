@@ -473,3 +473,73 @@ th {
     display: block;
     margin-top: 2px;
 }
+
+/**
+ * 参加者バッジ用スタイル
+ */
+.participant-badge {
+    display: inline-flex;
+    align-items: center;
+    background: var(--light-grass);
+    color: var(--grass-green);
+    padding: 6px 12px;
+    border-radius: 16px;
+    font-size: 0.85rem;
+    font-weight: bold;
+    border: 1px solid #c8e6c9;
+}
+
+.participant-remove {
+    margin-left: 8px;
+    cursor: pointer;
+    color: var(--danger-color);
+    font-size: 1.1rem;
+    line-height: 1;
+}
+
+/**
+ * 盗塁テキストとマス目の高さ調整
+ */
+.atbat-cell {
+    height: auto;
+    min-height: 45px;
+    padding: 4px 2px;
+}
+
+.steal-text {
+    color: #1976d2;
+    font-size: 0.75rem;
+    display: block;
+    margin-top: 2px;
+    font-weight: normal;
+}
+
+/**
+ * 追加：投手成績の入力用スタイル
+ */
+.pitcher-row {
+    background: #f9f9f9;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #eee;
+    margin-bottom: 15px;
+}
+
+.pitcher-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.pitcher-grid label {
+    font-size: 0.75rem;
+    color: #666;
+    margin-bottom: 2px;
+    display: block;
+}
+
+.pitcher-grid input, .pitcher-grid select {
+    padding: 8px;
+    font-size: 0.95rem;
+}
