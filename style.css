@@ -111,7 +111,12 @@ main {
     margin-bottom: 12px;
 }
 
-/* 戦績バッジ */
+/* 🌟 変更：戦績バッジの中央揃え用 */
+.record-badge-wrapper {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
 .record-badge {
     background: var(--grass-green);
     color: white;
@@ -119,21 +124,26 @@ main {
     padding: 5px 15px;
     border-radius: 20px;
     font-weight: bold;
-    margin-bottom: 15px;
     font-size: 0.9rem;
 }
 
-/* フォーム要素 */
+/* 🌟 変更：フォーム要素を横並び（右側入力）に */
 .form-group {
+    display: flex;
+    align-items: center;
     margin-bottom: 15px;
 }
 
 .form-group label {
-    display: block;
+    flex: 0 0 75px; /* ラベルの幅を固定 */
     font-size: 0.85rem;
     font-weight: bold;
-    margin-bottom: 5px;
     color: var(--grass-green);
+    margin-bottom: 0;
+}
+
+.form-group input {
+    flex: 1; /* 入力欄が残りの幅を埋める */
 }
 
 input, select {
@@ -267,6 +277,29 @@ th {
     padding: 8px;
     font-size: 0.85rem;
     flex: 1;
+}
+
+/**
+ * 参加者バッジ用スタイル
+ */
+.participant-badge {
+    display: inline-flex;
+    align-items: center;
+    background: var(--light-grass);
+    color: var(--grass-green);
+    padding: 6px 12px;
+    border-radius: 16px;
+    font-size: 0.85rem;
+    font-weight: bold;
+    border: 1px solid #c8e6c9;
+}
+
+.participant-remove {
+    margin-left: 8px;
+    cursor: pointer;
+    color: var(--danger-color);
+    font-size: 1.1rem;
+    line-height: 1;
 }
 
 /**
@@ -441,7 +474,7 @@ th {
 }
 
 /**
- * 🌟 追加：打席成績（マトリックス）入力
+ * 打席成績（マトリックス）入力
  */
 .atbat-table th {
     min-width: 60px;
@@ -449,7 +482,9 @@ th {
 
 .atbat-cell {
     min-width: 65px;
-    height: 45px;
+    height: auto;
+    min-height: 45px;
+    padding: 4px 2px;
     cursor: pointer;
     background: #fafafa;
     font-size: 0.85rem;
@@ -474,38 +509,6 @@ th {
     margin-top: 2px;
 }
 
-/**
- * 参加者バッジ用スタイル
- */
-.participant-badge {
-    display: inline-flex;
-    align-items: center;
-    background: var(--light-grass);
-    color: var(--grass-green);
-    padding: 6px 12px;
-    border-radius: 16px;
-    font-size: 0.85rem;
-    font-weight: bold;
-    border: 1px solid #c8e6c9;
-}
-
-.participant-remove {
-    margin-left: 8px;
-    cursor: pointer;
-    color: var(--danger-color);
-    font-size: 1.1rem;
-    line-height: 1;
-}
-
-/**
- * 盗塁テキストとマス目の高さ調整
- */
-.atbat-cell {
-    height: auto;
-    min-height: 45px;
-    padding: 4px 2px;
-}
-
 .steal-text {
     color: #1976d2;
     font-size: 0.75rem;
@@ -515,7 +518,7 @@ th {
 }
 
 /**
- * 追加：投手成績の入力用スタイル
+ * 投手成績の入力用スタイル
  */
 .pitcher-row {
     background: #f9f9f9;
