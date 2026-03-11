@@ -13,7 +13,8 @@ let currentAtBatColumns = 5;
 let currentStatsYear = "all"; 
 let currentRecordYear = "all";
 let tempParticipants = [];
-let tempPitchers = []; // 🌟 追加：投手成績の一時保存用
+let tempPitchers = []; 
+let isGameDeleteMode = false; // 🌟 追加：削除ボタンの表示/非表示状態
 
 /**
  * 起動時の処理
@@ -87,6 +88,14 @@ function formatNumberInput(inputEl) {
     inputEl.value = val;
 }
 
+// 🌟 追加：ひらがなをカタカナに自動変換する機能
+function convertToKatakana(str) {
+    return str.replace(/[\u3041-\u3096]/g, function(match) {
+        const chr = match.charCodeAt(0) + 0x60;
+        return String.fromCharCode(chr);
+    });
+}
+
 /**
  * 選手管理機能
  */
@@ -98,10 +107,12 @@ function showAddPlayerModal() {
 
     const suggestedNum = getSuggestedAssistantNumber();
 
+    // 🌟 変更：ふりがな入力欄の追加
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
             <input type="text" inputmode="numeric" id="p-number" placeholder="背番号 (助っ人候補: ${suggestedNum})" onblur="formatNumberInput(this)">
             <input type="text" id="p-name" placeholder="氏名">
+            <input type="text" id="p-furigana" placeholder="フリガナ (任意)" onblur="this.value = convertToKatakana(this.value)">
             <select id="p-side">
                 <option value="右投右打">右投右打</option>
                 <option value="右投左打">右投左打</option>
@@ -122,6 +133,7 @@ function showAddPlayerModal() {
 
 function addPlayer() {
     const name = document.getElementById('p-name').value;
+    const furigana = document.getElementById('p-furigana').value; // 🌟 追加
     const mainPos = document.getElementById('p-main-pos').value;
     let numInput = document.getElementById('p-number').value;
 
@@ -147,6 +159,7 @@ function addPlayer() {
         number: numberToSave,
         pastNumbers: [],
         name: name,
+        furigana: furigana, // 🌟 追加
         side: document.getElementById('p-side').value,
         mainPos: mainPos,
         subPos: Array.from(document.querySelectorAll('input[name="sub-pos"]:checked')).map(cb => cb.value),
@@ -162,9 +175,13 @@ function showPlayerDetail(id) {
     if(!p) return;
     currentEditingPlayerId = id;
 
+    // 🌟 変更：ふりがながあれば表示
+    const furiHtml = p.furigana ? `<p style="font-size:0.8rem; color:#666; margin:0 0 -5px 0;">${p.furigana}</p>` : '';
+
     document.getElementById('modal-title').innerText = "選手情報";
     document.getElementById('modal-body').innerHTML = `
         <div class="view-content">
+            ${furiHtml}
             <p><strong>氏名:</strong> ${p.name}</p>
             <p><strong>背番号:</strong> ${p.number}</p>
             <p><strong>投打:</strong> ${p.side}</p>
@@ -192,6 +209,7 @@ function showEditForm(id) {
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
             <label>氏名:</label> <input type="text" id="edit-name" value="${p.name}">
+            <label>フリガナ:</label> <input type="text" id="edit-furigana" value="${p.furigana || ''}" placeholder="フリガナ (任意)" onblur="this.value = convertToKatakana(this.value)">
             <label>背番号:</label> 
             <input type="text" inputmode="numeric" id="edit-number" value="${p.number === '無' ? '' : p.number}" placeholder="助っ人候補: ${suggestedNum}" onblur="formatNumberInput(this)">
             <label>投打:</label>
@@ -239,6 +257,7 @@ function updatePlayer() {
     }
 
     p.name = document.getElementById('edit-name').value;
+    p.furigana = document.getElementById('edit-furigana').value; // 🌟 追加
     p.number = numberToSave;
     p.side = document.getElementById('edit-side').value;
     p.mainPos = document.getElementById('edit-main-pos').value;
@@ -274,6 +293,17 @@ function renderPlayerList() {
 /**
  * 試合管理機能
  */
+// 🌟 追加：削除ボタンの表示切り替えロジック
+function toggleDeleteMode() {
+    isGameDeleteMode = !isGameDeleteMode;
+    const btn = document.getElementById('toggle-delete-btn');
+    if (btn) {
+        btn.innerText = isGameDeleteMode ? "完了" : "編集";
+        btn.style.background = isGameDeleteMode ? "#999" : "var(--edit-color)";
+    }
+    renderGameList(); // 表示を更新
+}
+
 function showAddGameModal(gameId = null) {
     const isEdit = gameId !== null;
     
@@ -379,7 +409,7 @@ function processGame(gameId) {
         score: gameId ? games.find(x => x.id === gameId).score : { us: 0, them: 0 },
         innings: gameId ? games.find(x => x.id === gameId).innings : Array(9).fill().map(() => ({ us: "", them: "" })),
         lineup: gameId ? (games.find(x => x.id === gameId).lineup || []) : [],
-        pitchers: gameId ? (games.find(x => x.id === gameId).pitchers || []) : [], // 🌟 追加：投手データ
+        pitchers: gameId ? (games.find(x => x.id === gameId).pitchers || []) : [], 
         isFinished: gameId ? games.find(x => x.id === gameId).isFinished : false
     };
 
@@ -409,11 +439,15 @@ function renderGameList() {
 
     const sortedGames = [...games].sort((a, b) => new Date(b.date) - new Date(a.date));
 
+    // 🌟 試合情報タブの描画
     container.innerHTML = sortedGames.map(g => {
         const resultText = g.isFinished ? (g.score.us > g.score.them ? ' (勝)' : g.score.us < g.score.them ? ' (敗)' : ' (分)') : ' (未完了)';
         const weatherIcon = g.weather === '晴れ' ? '☀️' : g.weather === '曇り' ? '☁️' : g.weather === '雨' ? '☔' : '❓';
         const pCount = g.participants ? g.participants.length : 0; 
         
+        // 🌟 変更：削除ボタンは「編集」モードがONの時だけ表示
+        const deleteBtnHtml = isGameDeleteMode ? `<button class="btn-delete" style="width:100%; margin-top:8px;" onclick="deleteGame(${g.id})">この試合を削除</button>` : '';
+
         return `
             <div class="game-card">
                 <div class="game-card-header">
@@ -423,17 +457,15 @@ function renderGameList() {
                 <p>📅 ${g.date} (${g.side}) | 📍 ${g.location} | 👥 参加: ${pCount}名</p>
                 <p class="score-text">スコア: ${g.score.us} - ${g.score.them}${resultText}</p>
                 
-                <div class="game-card-btns" style="margin-top: 15px;">
-                    <button class="btn-score" style="background:#1976d2;" onclick="showLineupModal(${g.id})">スタメン・打順設定</button>
+                <div class="game-card-btns" style="margin-top: 15px; display: flex; gap: 10px;">
+                    <button class="btn-score" style="background:#1976d2; flex:1;" onclick="showLineupModal(${g.id})">スタメン・打順</button>
+                    <button class="btn-edit-mode" style="flex:1;" onclick="showAddGameModal(${g.id})">試合情報の編集</button>
                 </div>
-                
-                <div class="game-card-btns">
-                    <button class="btn-edit-mode" onclick="showAddGameModal(${g.id})">試合情報を編集</button>
-                    <button class="btn-delete" onclick="deleteGame(${g.id})">削除</button>
-                </div>
+                ${deleteBtnHtml}
             </div>`;
     }).join('');
 
+    // 🌟 スコア入力タブの描画
     if(scoreContainer) {
         scoreContainer.innerHTML = sortedGames.map(g => {
             const weatherIcon = g.weather === '晴れ' ? '☀️' : g.weather === '曇り' ? '☁️' : g.weather === '雨' ? '☔' : '❓';
@@ -447,11 +479,11 @@ function renderGameList() {
                 <p class="score-text large">スコア: ${g.score.us} - ${g.score.them}</p>
                 
                 <div style="display:flex; flex-direction:column; gap:10px; margin-top:15px;">
+                    <button class="btn-score" style="background:#4caf50; width:100%;" onclick="showScoreInputModal(${g.id})">イニングスコアボード</button>
                     <div style="display:flex; gap:10px;">
-                        <button class="btn-score" style="background:#4caf50; flex:1;" onclick="showScoreInputModal(${g.id})">スコアボード</button>
-                        <button class="btn-score" style="background:#ff9800; flex:1;" onclick="showAtBatMatrixModal(${g.id})">打席成績を入力</button>
+                        <button class="btn-score" style="background:#ff9800; flex:1;" onclick="showAtBatMatrixModal(${g.id})">打席成績</button>
+                        <button class="btn-score" style="background:#673ab7; flex:1;" onclick="showPitcherModal(${g.id})">投手成績</button>
                     </div>
-                    <button class="btn-score" style="background:#673ab7;" onclick="showPitcherModal(${g.id})">投手成績を入力</button>
                 </div>
             </div>`;
         }).join('');
@@ -548,7 +580,7 @@ function saveLineup() {
 }
 
 /**
- * 🌟 新規追加：投手成績入力機能
+ * 投手成績入力機能
  */
 function showPitcherModal(gameId) {
     currentGameForScore = games.find(g => g.id === gameId);
@@ -650,7 +682,7 @@ function savePitchers() {
 }
 
 /**
- * 打席成績入力機能（🌟 走るアイコンの削除）
+ * 打席成績入力機能
  */
 function showAtBatMatrixModal(gameId) {
     currentGameForScore = games.find(g => g.id === gameId);
@@ -689,7 +721,6 @@ function renderAtBatMatrix() {
             const resData = item.results[atBatIdx];
             const text = resData && resData.result ? resData.result : "";
             const rbiText = resData && resData.rbi > 0 ? `<span class="rbi-text">${resData.rbi}打点</span>` : "";
-            // 🌟 修正：アイコン（🏃）を削除しました
             const stealText = resData && resData.steal > 0 ? `<span class="steal-text">${resData.steal}盗</span>` : "";
             const isFilled = text !== "" ? "filled" : "";
             
@@ -967,7 +998,7 @@ function importData(event) {
 }
 
 /**
- * 🌟 チーム成績・個人成績（打撃＆投手）の集計
+ * チーム成績・個人成績の集計
  */
 function updateTeamRecord() {
     const el = document.getElementById('team-record');
@@ -980,7 +1011,8 @@ function updateTeamRecord() {
     if (!selectEl) {
         selectEl = document.createElement('select');
         selectEl.id = 'record-year-select';
-        selectEl.style.marginBottom = '10px';
+        // 🌟 変更：プルダウンも中央揃えにする
+        selectEl.style.margin = '0 auto 10px auto';
         selectEl.style.display = 'block';
         selectEl.style.width = '150px';
         selectEl.style.padding = '8px';
@@ -1038,7 +1070,6 @@ function renderStatsPage() {
         return g.date.substring(0, 4) === currentStatsYear;
     });
 
-    // 打者用・投手用の箱を用意
     const playerStats = {};
     const pitcherStats = {};
     players.forEach(p => {
@@ -1053,7 +1084,6 @@ function renderStatsPage() {
     });
 
     targetGames.forEach(g => {
-        // 打撃成績の集計
         if (g.lineup) {
             g.lineup.forEach(item => {
                 const pid = item.playerId;
@@ -1082,14 +1112,12 @@ function renderStatsPage() {
             });
         }
         
-        // 🌟 投手成績の集計
         if (g.pitchers) {
             g.pitchers.forEach(item => {
                 const pid = item.playerId;
                 if (!pid || !pitcherStats[pid]) return;
                 
                 pitcherStats[pid].games++;
-                // アウト数を計算（1回 = 3アウト）
                 const totalOuts = (parseInt(item.innings) || 0) * 3 + (parseInt(item.outs) || 0);
                 pitcherStats[pid].outs += totalOuts;
                 pitcherStats[pid].er += (parseInt(item.er) || 0);
@@ -1099,7 +1127,6 @@ function renderStatsPage() {
         }
     });
 
-    // 🌟 打率の計算
     let bStatsArray = Object.values(playerStats).map(s => {
         if (s.ab > 0) {
             let avgNum = s.hits / s.ab;
@@ -1110,15 +1137,12 @@ function renderStatsPage() {
         return s;
     });
 
-    // 🌟 防御率（ERA）の計算 ※草野球標準の「7イニング制」で計算
     let pStatsArray = Object.values(pitcherStats).map(s => {
-        // 表示用の投球回（例: 2回 1/3）
         let innFull = Math.floor(s.outs / 3);
         let innRem = s.outs % 3;
         s.ipDisplay = innRem > 0 ? `${innFull} ${innRem}/3` : `${innFull}`;
 
         if (s.outs > 0) {
-            // 防御率 = (自責点 × 7 × 3) ÷ 総アウト数
             s.era = ((s.er * 7 * 3) / s.outs).toFixed(2);
         } else {
             s.era = "-";
@@ -1130,7 +1154,6 @@ function renderStatsPage() {
         bStatsArray = bStatsArray.filter(s => s.games > 0);
         pStatsArray = pStatsArray.filter(s => s.games > 0);
     } else {
-        // 通算の場合は、1度も出ていない人は隠す
         bStatsArray = bStatsArray.filter(s => s.pa > 0 || s.games > 0);
         pStatsArray = pStatsArray.filter(s => s.outs > 0 || s.games > 0);
     }
@@ -1142,7 +1165,6 @@ function renderStatsPage() {
         return b.pa - a.pa;
     });
 
-    // 防御率は低い順に並べる（0は除く）
     pStatsArray.sort((a, b) => {
         const eraA = a.era === "-" ? 999 : parseFloat(a.era);
         const eraB = b.era === "-" ? 999 : parseFloat(b.era);
@@ -1193,7 +1215,6 @@ function renderStatsPage() {
         </div>
     `;
 
-    // 🌟 投手成績の表を追加
     html += `<h3 style="color:var(--grass-green); margin-top:25px;">投手成績</h3>`;
     if (pStatsArray.length === 0) {
         html += `<p style="font-size:0.85rem; color:#666;">投手記録がありません。</p>`;
