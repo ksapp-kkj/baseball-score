@@ -5,9 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>⚾️野球スコア管理アプリ</title>
     <link rel="stylesheet" href="style.css">
-    
     <link rel="apple-touch-icon" href="icon.png?v=1">
-    
 </head>
 <body>
 
@@ -24,10 +22,10 @@
 
     <main>
         <section id="team-page" class="content-section active">
-            <h2>チーム情報</h2>
+            <h2>チーム情報 <span class="help-trigger" onclick="showHelpModal('team')">📝</span></h2>
+            
             <div class="card">
                 <h3>基本情報</h3>
-                
                 <div class="record-badge-wrapper">
                     <div id="team-record" class="record-badge">0勝 0敗 0分</div>
                 </div>
@@ -69,7 +67,7 @@
 
         <section id="game-page" class="content-section">
             <div class="list-header">
-                <h2>試合管理</h2>
+                <h2>試合管理 <span class="help-trigger" onclick="showHelpModal('game')">📝</span></h2>
                 <div style="display:flex; gap:8px;">
                     <button class="btn-edit-mode" id="toggle-delete-btn" style="padding:8px 12px; font-size:0.85rem;" onclick="toggleDeleteMode()">編集</button>
                     <button class="btn-add" onclick="showAddGameModal()">新規試合登録</button>
@@ -82,14 +80,16 @@
         </section>
 
         <section id="score-page" class="content-section">
-            <h2>スコア入力</h2>
+            <h2>スコア入力 <span class="help-trigger" onclick="showHelpModal('score')">📝</span></h2>
+            
             <div id="score-game-list-container">
                 <p class="empty-message">試合が登録されていません</p>
             </div>
         </section>
 
         <section id="stats-page" class="content-section">
-            <h2>通算成績</h2>
+            <h2>通算成績 <span class="help-trigger" onclick="showHelpModal('stats')">📝</span></h2>
+            
             <div class="card">
                 <p>個人成績・チーム統計は現在準備中です。</p>
             </div>
