@@ -14,7 +14,7 @@ let currentStatsYear = "all";
 let currentRecordYear = "all";
 let tempParticipants = [];
 let tempPitchers = []; 
-let isGameDeleteMode = false; // 🌟 追加：削除ボタンの表示/非表示状態
+let isGameDeleteMode = false; 
 
 /**
  * 起動時の処理
@@ -88,7 +88,6 @@ function formatNumberInput(inputEl) {
     inputEl.value = val;
 }
 
-// 🌟 追加：ひらがなをカタカナに自動変換する機能
 function convertToKatakana(str) {
     return str.replace(/[\u3041-\u3096]/g, function(match) {
         const chr = match.charCodeAt(0) + 0x60;
@@ -107,7 +106,6 @@ function showAddPlayerModal() {
 
     const suggestedNum = getSuggestedAssistantNumber();
 
-    // 🌟 変更：ふりがな入力欄の追加
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
             <input type="text" inputmode="numeric" id="p-number" placeholder="背番号 (助っ人候補: ${suggestedNum})" onblur="formatNumberInput(this)">
@@ -133,7 +131,7 @@ function showAddPlayerModal() {
 
 function addPlayer() {
     const name = document.getElementById('p-name').value;
-    const furigana = document.getElementById('p-furigana').value; // 🌟 追加
+    const furigana = document.getElementById('p-furigana').value; 
     const mainPos = document.getElementById('p-main-pos').value;
     let numInput = document.getElementById('p-number').value;
 
@@ -159,7 +157,7 @@ function addPlayer() {
         number: numberToSave,
         pastNumbers: [],
         name: name,
-        furigana: furigana, // 🌟 追加
+        furigana: furigana, 
         side: document.getElementById('p-side').value,
         mainPos: mainPos,
         subPos: Array.from(document.querySelectorAll('input[name="sub-pos"]:checked')).map(cb => cb.value),
@@ -175,7 +173,6 @@ function showPlayerDetail(id) {
     if(!p) return;
     currentEditingPlayerId = id;
 
-    // 🌟 変更：ふりがながあれば表示
     const furiHtml = p.furigana ? `<p style="font-size:0.8rem; color:#666; margin:0 0 -5px 0;">${p.furigana}</p>` : '';
 
     document.getElementById('modal-title').innerText = "選手情報";
@@ -257,7 +254,7 @@ function updatePlayer() {
     }
 
     p.name = document.getElementById('edit-name').value;
-    p.furigana = document.getElementById('edit-furigana').value; // 🌟 追加
+    p.furigana = document.getElementById('edit-furigana').value; 
     p.number = numberToSave;
     p.side = document.getElementById('edit-side').value;
     p.mainPos = document.getElementById('edit-main-pos').value;
@@ -293,7 +290,6 @@ function renderPlayerList() {
 /**
  * 試合管理機能
  */
-// 🌟 追加：削除ボタンの表示切り替えロジック
 function toggleDeleteMode() {
     isGameDeleteMode = !isGameDeleteMode;
     const btn = document.getElementById('toggle-delete-btn');
@@ -301,7 +297,7 @@ function toggleDeleteMode() {
         btn.innerText = isGameDeleteMode ? "完了" : "編集";
         btn.style.background = isGameDeleteMode ? "#999" : "var(--edit-color)";
     }
-    renderGameList(); // 表示を更新
+    renderGameList(); 
 }
 
 function showAddGameModal(gameId = null) {
@@ -439,13 +435,11 @@ function renderGameList() {
 
     const sortedGames = [...games].sort((a, b) => new Date(b.date) - new Date(a.date));
 
-    // 🌟 試合情報タブの描画
     container.innerHTML = sortedGames.map(g => {
         const resultText = g.isFinished ? (g.score.us > g.score.them ? ' (勝)' : g.score.us < g.score.them ? ' (敗)' : ' (分)') : ' (未完了)';
         const weatherIcon = g.weather === '晴れ' ? '☀️' : g.weather === '曇り' ? '☁️' : g.weather === '雨' ? '☔' : '❓';
         const pCount = g.participants ? g.participants.length : 0; 
         
-        // 🌟 変更：削除ボタンは「編集」モードがONの時だけ表示
         const deleteBtnHtml = isGameDeleteMode ? `<button class="btn-delete" style="width:100%; margin-top:8px;" onclick="deleteGame(${g.id})">この試合を削除</button>` : '';
 
         return `
@@ -465,7 +459,6 @@ function renderGameList() {
             </div>`;
     }).join('');
 
-    // 🌟 スコア入力タブの描画
     if(scoreContainer) {
         scoreContainer.innerHTML = sortedGames.map(g => {
             const weatherIcon = g.weather === '晴れ' ? '☀️' : g.weather === '曇り' ? '☁️' : g.weather === '雨' ? '☔' : '❓';
@@ -998,6 +991,58 @@ function importData(event) {
 }
 
 /**
+ * 🌟 新規追加：使い方モーダルの表示
+ */
+function showHelpModal(pageId) {
+    const helpData = {
+        team: {
+            title: "チーム情報の使い方",
+            content: `
+                <div class="help-content-modal">
+                    <p>・チームの基本情報と、所属する<strong>選手の名簿</strong>を管理します。</p>
+                    <p>・「選手登録」からメンバーを追加してください（背番号の重複はできません）。</p>
+                    <p>・一番下にある<strong>「データ管理」</strong>から、機種変更時などに備えたバックアップと復元が行えます。</p>
+                </div>`
+        },
+        game: {
+            title: "試合管理の使い方",
+            content: `
+                <div class="help-content-modal">
+                    <p>・試合のスケジュールと<strong>当日のスタメン</strong>を登録します。</p>
+                    <p>・まずは「新規試合登録」から、対戦相手や<strong>当日の参加者</strong>を登録してください（欠席者を✖で外します）。</p>
+                    <p>・次に、青い「スタメン・打順」ボタンを押してオーダーを組みます。</p>
+                    <p>・試合を削除したい時は、右上の「編集」ボタンを押すと削除ボタンが現れます。</p>
+                </div>`
+        },
+        score: {
+            title: "スコア入力の使い方",
+            content: `
+                <div class="help-content-modal">
+                    <p>・試合中の<strong>結果入力（スコアブック）</strong>を行うページです。</p>
+                    <p>・<strong>打席成績：</strong>表のマス目をタップして、打席ごとの結果（安打・打点・盗塁など）を入力します。</p>
+                    <p>・<strong>投手成績：</strong>登板した投手の投球回や自責点を入力します。</p>
+                    <p>・試合が終わったら「イニングスコアボード」を開き、<strong>『この試合を終了とする（集計に反映）』にチェックを入れて保存</strong>してください。これで成績に反映されます。</p>
+                </div>`
+        },
+        stats: {
+            title: "成績表示の使い方",
+            content: `
+                <div class="help-content-modal">
+                    <p>・「終了済（集計に反映）」になった試合のデータから、<strong>個人の打撃成績と投手成績を自動で計算</strong>して表示します。</p>
+                    <p>・「表示シーズン」のプルダウンを切り替えることで、<strong>年度ごとの成績</strong>に絞り込んで確認することができます。</p>
+                </div>`
+        }
+    };
+
+    const data = helpData[pageId];
+    if (!data) return;
+
+    document.getElementById('modal-title').innerText = data.title;
+    document.getElementById('modal-body').innerHTML = data.content;
+    document.getElementById('modal-overlay').style.display = 'flex';
+}
+
+/**
  * チーム成績・個人成績の集計
  */
 function updateTeamRecord() {
@@ -1011,7 +1056,6 @@ function updateTeamRecord() {
     if (!selectEl) {
         selectEl = document.createElement('select');
         selectEl.id = 'record-year-select';
-        // 🌟 変更：プルダウンも中央揃えにする
         selectEl.style.margin = '0 auto 10px auto';
         selectEl.style.display = 'block';
         selectEl.style.width = '150px';
