@@ -81,6 +81,12 @@ main {
 /**
  * ユーティリティ・テキスト
  */
+h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .empty-message {
     text-align: center;
     color: #666;
@@ -111,7 +117,6 @@ main {
     margin-bottom: 12px;
 }
 
-/* 🌟 変更：戦績バッジの中央揃え用 */
 .record-badge-wrapper {
     text-align: center;
     margin-bottom: 20px;
@@ -127,7 +132,6 @@ main {
     font-size: 0.9rem;
 }
 
-/* 🌟 変更：フォーム要素を横並び（右側入力）に */
 .form-group {
     display: flex;
     align-items: center;
@@ -545,4 +549,23 @@ th {
 .pitcher-grid input, .pitcher-grid select {
     padding: 8px;
     font-size: 0.95rem;
+}
+
+/**
+ * 🌟 変更：メモ絵文字「📝」のスタイル
+ */
+.help-trigger {
+    cursor: pointer;
+    font-size: 1.3rem; /* 絵文字なので少し大きめに */
+    vertical-align: middle;
+    margin-left: 5px;
+    display: inline-block;
+    text-align: center;
+}
+
+.help-content-modal p {
+    font-size: 0.85rem;
+    color: #555;
+    margin: 8px 0;
+    line-height: 1.5;
 }
