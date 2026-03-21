@@ -1,11 +1,30 @@
 /**
- * 設定・状態管理
+ * 🌟 Firebaseの初期設定
  */
+const firebaseConfig = {
+  apiKey: "AIzaSyCyCfzG-CwRS9p0KcyVPgCiYv6wBGGsIiE",
+  authDomain: "baseball-score-app-cf80d.firebaseapp.com",
+  projectId: "baseball-score-app-cf80d",
+  storageBucket: "baseball-score-app-cf80d.firebasestorage.app",
+  messagingSenderId: "186268082523",
+  appId: "1:186268082523:web:8c8e466f56ec82c3cefa7e"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const auth = firebase.auth();
+
+/**
+ * 🌟 アプリ全体の状態管理
+ */
+let currentUser = null;       
+let currentTeamId = null;     
+
 const positionOptions = ["P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH"];
 const lineupPositionOptions = ["P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH", "EH", "ベンチ"];
 
-let players = JSON.parse(localStorage.getItem('baseball_players')) || [];
-let games = JSON.parse(localStorage.getItem('baseball_games')) || [];
+let players = [];
+let games = [];
 let currentEditingPlayerId = null;
 let currentGameForScore = null;
 let tempLineup = []; 
@@ -17,13 +36,212 @@ let tempPitchers = [];
 let isGameDeleteMode = false; 
 
 /**
+ * 🌟 画面切り替えの仕組み
+ */
+function showScreen(screenId) {
+    document.querySelectorAll('.app-screen').forEach(sec => {
+        sec.style.display = 'none';
+        sec.classList.remove('active');
+    });
+    const target = document.getElementById(screenId);
+    if(target) {
+        target.style.display = 'block';
+        target.classList.add('active');
+    }
+}
+
+/**
+ * 🌟 Firebase 認証（ログイン・ログアウト）
+ */
+auth.onAuthStateChanged((user) => {
+    if (user) {
+        currentUser = user;
+        showScreen('mypage-screen');
+        loadUserTeams(); 
+    } else {
+        currentUser = null;
+        currentTeamId = null;
+        showScreen('login-screen');
+    }
+});
+
+async function loginWithEmail() {
+    const email = document.getElementById('email-input').value;
+    const password = document.getElementById('password-input').value;
+    
+    if(!email || !password) return alert("メールアドレスとパスワードを入力してください");
+    
+    try {
+        await auth.signInWithEmailAndPassword(email, password);
+    } catch(error) {
+        if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-login-credentials') {
+            if(confirm("アカウントが見つかりません。入力した内容で新規登録しますか？")) {
+                try {
+                    await auth.createUserWithEmailAndPassword(email, password);
+                    alert("新規登録が完了しました！");
+                } catch(e) { 
+                    alert("登録エラー: " + e.message); 
+                }
+            }
+        } else {
+            alert("エラー: " + error.message);
+        }
+    }
+}
+
+function logout() {
+    if(confirm("ログアウトしますか？")) {
+        auth.signOut();
+    }
+}
+
+/**
+ * 🌟 マイページ（チーム管理）機能
+ */
+async function loadUserTeams() {
+    const listEl = document.getElementById('user-team-list');
+    listEl.innerHTML = '<p class="empty-message">読み込み中...</p>';
+    
+    try {
+        const snapshot = await db.collection("teams").where("members", "array-contains", currentUser.uid).get();
+        
+        if (snapshot.empty) {
+            listEl.innerHTML = '<p class="empty-message">所属しているチームがありません。<br>「新しいチームを作成する」か、「招待ID」を入力してください。</p>';
+            return;
+        }
+        
+        let html = '';
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const isAdmin = data.admins && data.admins.includes(currentUser.uid);
+            const badge = isAdmin ? '<span class="admin-badge">管理者</span>' : '';
+            html += `<button class="team-select-btn" onclick="selectTeam('${doc.id}', '${data.team_name}')">${data.team_name} ${badge}</button>`;
+        });
+        listEl.innerHTML = html;
+        
+    } catch(e) {
+        listEl.innerHTML = '<p class="empty-message" style="color:red;">読み込みエラーが発生しました。</p>';
+        console.error(e);
+    }
+}
+
+function showCreateTeamModal() {
+    document.getElementById('modal-title').innerText = "新しいチームを作成";
+    document.getElementById('modal-body').innerHTML = `
+        <div class="edit-form">
+            <input type="text" id="new-team-name" placeholder="チーム名を入力" style="font-size: 1.1rem; padding: 12px;">
+            <div class="modal-btns" style="margin-top: 20px;">
+                <button class="btn-save" onclick="createNewTeam()">作成する</button>
+            </div>
+        </div>
+    `;
+    document.getElementById('modal-overlay').style.display = 'flex';
+}
+
+async function createNewTeam() {
+    const teamName = document.getElementById('new-team-name').value;
+    if (!teamName) return alert("チーム名を入力してください");
+    
+    try {
+        await db.collection("teams").add({
+            team_name: teamName,
+            manager_name: "",
+            captain_name: "",
+            members: [currentUser.uid], 
+            admins: [currentUser.uid],  
+            players: [],
+            games: []
+        });
+        closeModal();
+        loadUserTeams(); 
+    } catch (e) {
+        alert("作成エラー: " + e.message);
+    }
+}
+
+// 🌟 今回の追加機能1：招待IDでチームに参加する
+async function joinTeam() {
+    const teamIdInput = document.getElementById('join-team-id');
+    const teamId = teamIdInput.value.trim();
+    if (!teamId) return alert("招待IDを入力してください");
+
+    try {
+        const docRef = db.collection("teams").doc(teamId);
+        const doc = await docRef.get();
+
+        if (!doc.exists) {
+            return alert("入力されたIDのチームが見つかりません。IDが間違っていないか確認してください。");
+        }
+
+        // 魔法のコード「arrayUnion」を使って、名簿（members）に自分を安全に追加する
+        await docRef.update({
+            members: firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
+        });
+
+        alert("チームに参加しました！");
+        teamIdInput.value = ""; 
+        loadUserTeams(); 
+    } catch (error) {
+        alert("参加処理中にエラーが発生しました。");
+        console.error(error);
+    }
+}
+
+// 🌟 今回の追加機能2：招待IDをクリップボードにコピーする
+function copyTeamId() {
+    if (!currentTeamId) return;
+    navigator.clipboard.writeText(currentTeamId).then(() => {
+        alert("招待ID「" + currentTeamId + "」をコピーしました！\nLINE等でメンバーに共有して、チームに参加してもらってください。");
+    }).catch(err => {
+        alert("コピーに失敗しました。このIDを手動でコピーしてください: " + currentTeamId);
+    });
+}
+
+async function selectTeam(teamId, teamName) {
+    currentTeamId = teamId;
+    document.getElementById('current-team-display').innerText = teamName;
+    
+    // 🌟 ヘッダーにIDを表示させる
+    document.getElementById('team-id-display').innerText = `ID: ${teamId} (タップでコピー)`;
+    
+    try {
+        const doc = await db.collection("teams").doc(teamId).get();
+        const data = doc.data();
+        
+        players = data.players || [];
+        games = data.games || [];
+        
+        document.getElementById('team-name-input').value = data.team_name || teamName;
+        document.getElementById('manager-name-input').value = data.manager_name || "";
+        document.getElementById('captain-name-input').value = data.captain_name || "";
+        
+        renderPlayerList();
+        renderGameList();
+        updateTeamRecord();
+        renderStatsPage();
+        
+        showScreen('main-app-screen');
+    } catch(e) {
+        alert("チームデータの読み込みに失敗しました");
+        console.error(e);
+    }
+}
+
+function backToMyPage() {
+    currentTeamId = null;
+    players = [];
+    games = [];
+    showScreen('mypage-screen');
+    loadUserTeams();
+}
+
+
+/**
  * 起動時の処理
  */
 window.onload = function() {
-    renderPlayerList();
-    renderGameList();
-    updateTeamRecord();
-    renderStatsPage(); 
+    setupNavigation();
+    setupBackupUI();
     
     const teamFields = [
         { id: 'team-name-input', key: 'team_name' },
@@ -34,15 +252,18 @@ window.onload = function() {
     teamFields.forEach(field => {
         const el = document.getElementById(field.id);
         if (el) {
-            el.value = localStorage.getItem(field.key) || "";
-            el.addEventListener('input', (e) => {
-                localStorage.setItem(field.key, e.target.value);
+            el.addEventListener('change', async (e) => {
+                if (currentTeamId) {
+                    await db.collection("teams").doc(currentTeamId).update({
+                        [field.key]: e.target.value
+                    });
+                    if(field.key === 'team_name') {
+                        document.getElementById('current-team-display').innerText = e.target.value;
+                    }
+                }
             });
         }
     });
-    
-    setupNavigation();
-    setupBackupUI();
 };
 
 /**
@@ -918,7 +1139,33 @@ function deleteGame(id) {
 }
 
 /**
- * データ管理（バックアップ・復元）
+ * 🌟 データ管理（Firebaseへ保存）
+ */
+async function saveAndRefreshPlayers() {
+    renderPlayerList(); 
+    if (currentTeamId) {
+        try {
+            await db.collection("teams").doc(currentTeamId).update({
+                players: players
+            });
+        } catch(e) { console.error("選手保存エラー", e); }
+    }
+}
+
+async function saveAndRefreshGames() {
+    renderGameList();
+    renderStatsPage(); 
+    if (currentTeamId) {
+        try {
+            await db.collection("teams").doc(currentTeamId).update({
+                games: games
+            });
+        } catch(e) { console.error("試合保存エラー", e); }
+    }
+}
+
+/**
+ * データ移行（ローカルのバックアップをクラウドへ）
  */
 function setupBackupUI() {
     const teamPage = document.getElementById('team-page');
@@ -928,12 +1175,12 @@ function setupBackupUI() {
     backupDiv.className = 'card';
     backupDiv.style.marginTop = '20px';
     backupDiv.innerHTML = `
-        <h3>データ管理</h3>
-        <p style="font-size: 0.85rem; color: #666;">機種変更時やデータ紛失に備えて、定期的にバックアップを保存してください。</p>
+        <h3>データ管理（クラウド連携済）</h3>
+        <p style="font-size: 0.85rem; color: #666;">データは自動的にクラウドに保存されています。過去にJSON形式で書き出したデータをこのチームに流し込む場合は「復元」を押してください。</p>
         <div style="display: flex; gap: 10px; margin-top: 15px;">
-            <button class="btn-score" style="background:#1976d2; flex: 1; padding: 10px; font-size: 0.9rem;" onclick="exportData()">📥 バックアップを保存</button>
+            <button class="btn-score" style="background:#1976d2; flex: 1; padding: 10px; font-size: 0.9rem;" onclick="exportData()">📥 今のデータを書き出す</button>
             <label class="btn-edit-mode" style="background:#ff9800; flex: 1; text-align: center; cursor: pointer; padding: 10px; font-size: 0.9rem; border-radius: 8px; color: white; font-weight: bold;">
-                📤 データを復元する
+                📤 過去のデータを復元
                 <input type="file" accept=".json" style="display: none;" onchange="importData(event)">
             </label>
         </div>
@@ -943,11 +1190,11 @@ function setupBackupUI() {
 
 function exportData() {
     const data = {
-        players: localStorage.getItem('baseball_players'),
-        games: localStorage.getItem('baseball_games'),
-        team_name: localStorage.getItem('team_name'),
-        manager_name: localStorage.getItem('manager_name'),
-        captain_name: localStorage.getItem('captain_name')
+        players: JSON.stringify(players),
+        games: JSON.stringify(games),
+        team_name: document.getElementById('team-name-input').value,
+        manager_name: document.getElementById('manager-name-input').value,
+        captain_name: document.getElementById('captain-name-input').value
     };
     const jsonStr = JSON.stringify(data);
     const blob = new Blob([jsonStr], {type: "application/json"});
@@ -965,33 +1212,44 @@ function importData(event) {
     const file = event.target.files[0];
     if (!file) return;
     
-    if(!confirm("現在のデータはすべて上書きされます。復元を実行してもよろしいですか？")) {
+    if(!confirm("現在のチームデータがすべて上書きされます。復元を実行してもよろしいですか？")) {
         event.target.value = '';
         return;
     }
 
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = async function(e) {
         try {
             const data = JSON.parse(e.target.result);
             
-            if (data.players) localStorage.setItem('baseball_players', data.players);
-            if (data.games) localStorage.setItem('baseball_games', data.games);
-            if (data.team_name !== undefined) localStorage.setItem('team_name', data.team_name);
-            if (data.manager_name !== undefined) localStorage.setItem('manager_name', data.manager_name);
-            if (data.captain_name !== undefined) localStorage.setItem('captain_name', data.captain_name);
+            if (data.players) players = JSON.parse(data.players);
+            if (data.games) games = JSON.parse(data.games);
+            const newTeamName = data.team_name || document.getElementById('team-name-input').value;
+            const newManagerName = data.manager_name || document.getElementById('manager-name-input').value;
+            const newCaptainName = data.captain_name || document.getElementById('captain-name-input').value;
+
+            if (currentTeamId) {
+                await db.collection("teams").doc(currentTeamId).update({
+                    players: players,
+                    games: games,
+                    team_name: newTeamName,
+                    manager_name: newManagerName,
+                    captain_name: newCaptainName
+                });
+            }
             
-            alert('データの復元が完了しました！ページを再読み込みします。');
-            location.reload(); 
+            alert('クラウドへのデータの復元が完了しました！');
+            selectTeam(currentTeamId, newTeamName);
         } catch (error) {
-            alert('ファイルの読み込みに失敗しました。正しいバックアップファイル（.json）を選択してください。');
+            alert('ファイルの読み込みに失敗しました。');
+            console.error(error);
         }
     };
     reader.readAsText(file);
 }
 
 /**
- * 🌟 新規追加：使い方モーダルの表示
+ * 使い方モーダルの表示
  */
 function showHelpModal(pageId) {
     const helpData = {
@@ -1001,7 +1259,6 @@ function showHelpModal(pageId) {
                 <div class="help-content-modal">
                     <p>・チームの基本情報と、所属する<strong>選手の名簿</strong>を管理します。</p>
                     <p>・「選手登録」からメンバーを追加してください（背番号の重複はできません）。</p>
-                    <p>・一番下にある<strong>「データ管理」</strong>から、機種変更時などに備えたバックアップと復元が行えます。</p>
                 </div>`
         },
         game: {
@@ -1134,7 +1391,7 @@ function renderStatsPage() {
                 if (!pid || !playerStats[pid]) return;
                 let playedInGame = false;
                 item.results.forEach(res => {
-                    if (!res.result) return;
+                    if (!res || !res.result) return;
                     playedInGame = true;
                     playerStats[pid].pa++; 
                     playerStats[pid].rbi += (res.rbi || 0); 
@@ -1298,17 +1555,6 @@ function renderStatsPage() {
     }
 
     statsContainer.innerHTML = html;
-}
-
-function saveAndRefreshPlayers() {
-    localStorage.setItem('baseball_players', JSON.stringify(players));
-    renderPlayerList();
-}
-
-function saveAndRefreshGames() {
-    localStorage.setItem('baseball_games', JSON.stringify(games));
-    renderGameList();
-    renderStatsPage(); 
 }
 
 function closeModal() {
