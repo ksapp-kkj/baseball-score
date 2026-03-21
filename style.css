@@ -569,3 +569,74 @@ th {
     margin: 8px 0;
     line-height: 1.5;
 }
+
+/**
+ * 🌟 新規追加：ログイン画面・マイページ用スタイル
+ */
+
+/* 画面全体の切り替え用クラス（mainタグの代わり） */
+.app-screen {
+    display: none;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 10px;
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+.app-screen.active {
+    display: block;
+}
+
+/* 画面切り替え時のフワッと表示するアニメーション */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* チーム選択ボタン（マイページ用） */
+.team-select-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: white;
+    border: 2px solid var(--grass-green);
+    color: var(--grass-green);
+    padding: 15px 20px;
+    border-radius: 10px;
+    margin-bottom: 15px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.team-select-btn:hover {
+    background: var(--light-grass);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* チーム選択ボタンの中の管理者バッジ */
+.admin-badge {
+    background: var(--edit-color);
+    color: white;
+    font-size: 0.75rem;
+    padding: 3px 8px;
+    border-radius: 12px;
+    margin-left: 10px;
+    vertical-align: middle;
+}
+
+/* ログイン・登録フォームの入力欄調整 */
+#login-screen input {
+    font-size: 1.1rem;
+    padding: 15px;
+    background: #f9f9f9;
+}
+#login-screen input:focus {
+    background: white;
+    border-color: var(--grass-green);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(46, 125, 50, 0.2);
+}
