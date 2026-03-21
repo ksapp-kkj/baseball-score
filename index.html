@@ -9,92 +9,142 @@
 </head>
 <body>
 
-    <nav id="main-nav">
-        <div class="nav-title">野球スコア管理</div>
-        
-        <div class="nav-menu">
-            <div class="nav-item active" data-target="team-page">チーム情報</div>
-            <div class="nav-item" data-target="game-page">試合情報</div>
-            <div class="nav-item" data-target="score-page">スコア入力</div>
-            <div class="nav-item" data-target="stats-page">成績表示</div>
+    <div id="login-screen" class="app-screen active">
+        <div style="padding: 20px; text-align: center;">
+            <h2>⚾️野球スコア管理ログイン</h2>
+            <div class="card" style="margin-top: 20px;">
+                <div class="form-group">
+                    <input type="email" id="email-input" placeholder="メールアドレス" style="width: 100%; margin-bottom: 10px;">
+                </div>
+                <div class="form-group">
+                    <input type="password" id="password-input" placeholder="パスワード" style="width: 100%; margin-bottom: 15px;">
+                </div>
+                <button class="btn-add" onclick="loginWithEmail()" style="width: 100%; padding: 10px;">ログイン / 新規登録</button>
+            </div>
         </div>
-    </nav>
+    </div>
 
-    <main>
-        <section id="team-page" class="content-section active">
-            <h2>チーム情報 <span class="help-trigger" onclick="showHelpModal('team')">📝</span></h2>
+    <div id="mypage-screen" class="app-screen" style="display: none;">
+        <div style="padding: 20px;">
+            <div class="list-header">
+                <h2>マイページ</h2>
+                <button class="btn-edit-mode" onclick="logout()">ログアウト</button>
+            </div>
             
-            <div class="card">
-                <h3>基本情報</h3>
-                <div class="record-badge-wrapper">
-                    <div id="team-record" class="record-badge">0勝 0敗 0分</div>
+            <h3 style="margin-top: 20px; margin-bottom: 10px;">所属チーム一覧</h3>
+            <div id="user-team-list" class="card">
+                <p class="empty-message">読み込み中...</p>
+            </div>
+
+            <button class="btn-add" onclick="showCreateTeamModal()" style="width: 100%; margin-top: 20px; padding: 10px;">＋ 新しいチームを作成する</button>
+
+            <hr style="margin: 30px 0; border: none; border-top: 1px dashed #ccc;">
+            <h3 style="margin-bottom: 10px;">既存のチームに参加する</h3>
+            <p style="font-size: 0.85rem; color: #666; margin-bottom: 10px;">監督から共有された「招待ID」を入力してください。</p>
+            <div style="display: flex; gap: 8px;">
+                <input type="text" id="join-team-id" placeholder="招待IDを入力" style="flex: 1; padding: 10px; font-size: 1rem; border: 1px solid #ddd; border-radius: 8px;">
+                <button class="btn-score" style="background:#1976d2; border:none; border-radius:8px; color:white; font-weight:bold; padding:0 20px;" onclick="joinTeam()">参加</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="main-app-screen" class="app-screen" style="display: none;">
+        
+        <header style="display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; background: #2c3e50; color: white;">
+            <div>
+                <span id="current-team-display" style="font-weight: bold;">チーム名未定</span>
+                <div id="team-id-display" style="font-size: 0.75rem; color: #aaa; margin-top: 3px; cursor: pointer;" onclick="copyTeamId()">ID: --- (タップでコピー)</div>
+            </div>
+            <button class="btn-edit-mode" onclick="backToMyPage()" style="padding: 5px 10px; font-size: 0.8rem;">マイページへ戻る</button>
+        </header>
+
+        <nav id="main-nav">
+            <div class="nav-title">野球スコア管理</div>
+            
+            <div class="nav-menu">
+                <div class="nav-item active" data-target="team-page">チーム情報</div>
+                <div class="nav-item" data-target="game-page">試合情報</div>
+                <div class="nav-item" data-target="score-page">スコア入力</div>
+                <div class="nav-item" data-target="stats-page">成績表示</div>
+            </div>
+        </nav>
+
+        <main>
+            <section id="team-page" class="content-section active">
+                <h2>チーム情報 <span class="help-trigger" onclick="showHelpModal('team')">📝</span></h2>
+                
+                <div class="card">
+                    <h3>基本情報</h3>
+                    <div class="record-badge-wrapper">
+                        <div id="team-record" class="record-badge">0勝 0敗 0分</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>チーム名:</label>
+                        <input type="text" id="team-name-input" placeholder="チーム名">
+                    </div>
+                    <div class="form-group">
+                        <label>監督名:</label>
+                        <input type="text" id="manager-name-input" placeholder="監督名">
+                    </div>
+                    <div class="form-group">
+                        <label>主将名:</label>
+                        <input type="text" id="captain-name-input" placeholder="主将名">
+                    </div>
+                </div>
+
+                <div class="list-header">
+                    <h3>選手一覧</h3>
+                    <button class="btn-add" onclick="showAddPlayerModal()">選手登録</button>
                 </div>
                 
-                <div class="form-group">
-                    <label>チーム名:</label>
-                    <input type="text" id="team-name-input" placeholder="チーム名">
+                <div class="table-container">
+                    <table id="player-table">
+                        <thead>
+                            <tr>
+                                <th>背番号</th>
+                                <th>氏名</th>
+                                <th>投打</th>
+                                <th>守備</th>
+                            </tr>
+                        </thead>
+                        <tbody id="player-list-body">
+                        </tbody>
+                    </table>
                 </div>
-                <div class="form-group">
-                    <label>監督名:</label>
-                    <input type="text" id="manager-name-input" placeholder="監督名">
+            </section>
+
+            <section id="game-page" class="content-section">
+                <div class="list-header">
+                    <h2>試合管理 <span class="help-trigger" onclick="showHelpModal('game')">📝</span></h2>
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn-edit-mode" id="toggle-delete-btn" style="padding:8px 12px; font-size:0.85rem;" onclick="toggleDeleteMode()">編集</button>
+                        <button class="btn-add" onclick="showAddGameModal()">新規試合登録</button>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>主将名:</label>
-                    <input type="text" id="captain-name-input" placeholder="主将名">
+                
+                <div id="game-list-container">
+                    <p class="empty-message">試合が登録されていません</p>
                 </div>
-            </div>
+            </section>
 
-            <div class="list-header">
-                <h3>選手一覧</h3>
-                <button class="btn-add" onclick="showAddPlayerModal()">選手登録</button>
-            </div>
-            
-            <div class="table-container">
-                <table id="player-table">
-                    <thead>
-                        <tr>
-                            <th>背番号</th>
-                            <th>氏名</th>
-                            <th>投打</th>
-                            <th>守備</th>
-                        </tr>
-                    </thead>
-                    <tbody id="player-list-body">
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <section id="game-page" class="content-section">
-            <div class="list-header">
-                <h2>試合管理 <span class="help-trigger" onclick="showHelpModal('game')">📝</span></h2>
-                <div style="display:flex; gap:8px;">
-                    <button class="btn-edit-mode" id="toggle-delete-btn" style="padding:8px 12px; font-size:0.85rem;" onclick="toggleDeleteMode()">編集</button>
-                    <button class="btn-add" onclick="showAddGameModal()">新規試合登録</button>
+            <section id="score-page" class="content-section">
+                <h2>スコア入力 <span class="help-trigger" onclick="showHelpModal('score')">📝</span></h2>
+                
+                <div id="score-game-list-container">
+                    <p class="empty-message">試合が登録されていません</p>
                 </div>
-            </div>
-            
-            <div id="game-list-container">
-                <p class="empty-message">試合が登録されていません</p>
-            </div>
-        </section>
+            </section>
 
-        <section id="score-page" class="content-section">
-            <h2>スコア入力 <span class="help-trigger" onclick="showHelpModal('score')">📝</span></h2>
-            
-            <div id="score-game-list-container">
-                <p class="empty-message">試合が登録されていません</p>
-            </div>
-        </section>
-
-        <section id="stats-page" class="content-section">
-            <h2>通算成績 <span class="help-trigger" onclick="showHelpModal('stats')">📝</span></h2>
-            
-            <div class="card">
-                <p>個人成績・チーム統計は現在準備中です。</p>
-            </div>
-        </section>
-    </main>
+            <section id="stats-page" class="content-section">
+                <h2>通算成績 <span class="help-trigger" onclick="showHelpModal('stats')">📝</span></h2>
+                
+                <div class="card">
+                    <p>個人成績・チーム統計は現在準備中です。</p>
+                </div>
+            </section>
+        </main>
+    </div>
 
     <div id="modal-overlay" onclick="closeModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
@@ -105,6 +155,10 @@
         </div>
     </div>
 
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+    
     <script src="script.js"></script>
 </body>
 </html>
