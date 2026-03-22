@@ -713,3 +713,33 @@ th {
 .td-highlight-green { font-weight: bold; color: var(--grass-green); font-size: 1.1rem; }
 .td-highlight-blue { font-weight: bold; color: var(--score-blue); font-size: 1.1rem; }
 .empty-text { font-size: 0.85rem; color: #666; }
+
+/**
+ * 🌟 閲覧専用モード用のスタイル（入力ロックとボタン非表示）
+ */
+.viewer-mode .admin-only {
+    display: none !important;
+}
+
+.viewer-mode input,
+.viewer-mode select {
+    pointer-events: none !important;
+    background-color: #f5f5f5 !important;
+    color: #666 !important;
+    border: 1px dashed #ccc !important;
+}
+
+/* パスワードリセットボタン */
+.btn-reset-password {
+    background: none; 
+    border: none; 
+    color: var(--score-blue); 
+    text-decoration: underline; 
+    cursor: pointer; 
+    font-size: 0.85rem;
+}
+
+.mt-15-center {
+    text-align: center;
+    margin-top: 15px;
+}
