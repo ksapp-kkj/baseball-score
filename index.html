@@ -45,6 +45,10 @@
                 <input type="text" id="join-team-id" placeholder="招待IDを入力" style="flex: 1; padding: 10px; font-size: 1rem; border: 1px solid #ddd; border-radius: 8px;">
                 <button class="btn-score" style="background:#1976d2; border:none; border-radius:8px; color:white; font-weight:bold; padding:0 20px;" onclick="joinTeam()">参加</button>
             </div>
+
+            <div style="margin-top: 60px; text-align: center;">
+                <button onclick="deleteAccount()" style="background: none; border: none; color: #d32f2f; text-decoration: underline; cursor: pointer; font-size: 0.85rem;">アカウントを完全に削除する（退会）</button>
+            </div>
         </div>
     </div>
 
@@ -73,6 +77,8 @@
             <section id="team-page" class="content-section active">
                 <h2>チーム情報 <span class="help-trigger" onclick="showHelpModal('team')">📝</span></h2>
                 
+                <button id="manage-members-btn" class="btn-edit-mode" style="width: 100%; margin-bottom: 20px; display: none; background: #e65100;" onclick="showMemberManagementModal()">👥 チームメンバーと権限の管理</button>
+
                 <div class="card">
                     <h3>基本情報</h3>
                     <div class="record-badge-wrapper">
