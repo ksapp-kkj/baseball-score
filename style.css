@@ -551,12 +551,9 @@ th {
     font-size: 0.95rem;
 }
 
-/**
- * 🌟 変更：メモ絵文字「📝」のスタイル
- */
 .help-trigger {
     cursor: pointer;
-    font-size: 1.3rem; /* 絵文字なので少し大きめに */
+    font-size: 1.3rem; 
     vertical-align: middle;
     margin-left: 5px;
     display: inline-block;
@@ -570,11 +567,7 @@ th {
     line-height: 1.5;
 }
 
-/**
- * 🌟 新規追加：ログイン画面・マイページ用スタイル
- */
-
-/* 画面全体の切り替え用クラス（mainタグの代わり） */
+/* 画面全体の切り替え用クラス */
 .app-screen {
     display: none;
     max-width: 800px;
@@ -587,13 +580,11 @@ th {
     display: block;
 }
 
-/* 画面切り替え時のフワッと表示するアニメーション */
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* チーム選択ボタン（マイページ用） */
 .team-select-btn {
     display: block;
     width: 100%;
@@ -617,7 +608,6 @@ th {
     box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
-/* チーム選択ボタンの中の管理者バッジ */
 .admin-badge {
     background: var(--edit-color);
     color: white;
@@ -628,7 +618,6 @@ th {
     vertical-align: middle;
 }
 
-/* ログイン・登録フォームの入力欄調整 */
 #login-screen input {
     font-size: 1.1rem;
     padding: 15px;
@@ -640,3 +629,87 @@ th {
     outline: none;
     box-shadow: 0 0 0 2px rgba(46, 125, 50, 0.2);
 }
+
+/**
+ * 🌟 新規追加：インラインスタイルからの移管クラス
+ */
+.hidden { display: none !important; }
+.w-100 { width: 100% !important; }
+.flex-1 { flex: 1 !important; }
+.mt-5 { margin-top: 5px !important; }
+.mt-10 { margin-top: 10px !important; }
+.mt-15 { margin-top: 15px !important; }
+.mt-20 { margin-top: 20px !important; }
+.mt-25 { margin-top: 25px !important; }
+.mb-8 { margin-bottom: 8px !important; }
+.mb-10 { margin-bottom: 10px !important; }
+.mb-15 { margin-bottom: 15px !important; }
+.p-10 { padding: 10px !important; }
+
+.login-wrapper, .mypage-wrapper { padding: 20px; text-align: center; }
+.mypage-wrapper { text-align: left; }
+.dashed-hr { margin: 30px 0; border: none; border-top: 1px dashed #ccc; }
+.help-text { font-size: 0.8rem; color: #666; margin: 0; }
+.help-text-small { font-size: 0.75rem; color: #666; margin: 0; }
+.flex-gap-8 { display: flex; gap: 8px; align-items: center;}
+.input-box { flex: 1; padding: 10px; font-size: 1rem; border: 1px solid #ddd; border-radius: 8px; }
+
+.btn-join, .btn-update-name { border: none; border-radius: 8px; color: white; font-weight: bold; padding: 0 20px; height: 100%; min-height: 40px; cursor: pointer; }
+.btn-join { background: var(--score-blue); }
+.btn-update-name { background: #4caf50; padding: 0 15px; }
+
+.delete-wrapper { margin-top: 60px; text-align: center; }
+.btn-delete-account { background: none; border: none; color: var(--danger-color); text-decoration: underline; cursor: pointer; font-size: 0.85rem; }
+
+.edit-name-wrapper { margin-top: 30px; padding-top: 20px; border-top: 1px dashed #ccc; text-align: left; }
+.edit-name-label { font-size: 0.85rem; font-weight: bold; color: var(--grass-green); }
+
+.app-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; background: #2c3e50; color: white; }
+.header-team-name { font-weight: bold; }
+.header-team-id { font-size: 0.75rem; color: #aaa; margin-top: 3px; cursor: pointer; }
+.btn-back-mypage { padding: 5px 10px; font-size: 0.8rem; background: var(--edit-color); color: white; border: none; border-radius: 6px; cursor: pointer; }
+
+.btn-manage-members { background: #e65100; color: white; border: none; padding: 14px; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer; }
+
+.btn-small-edit { background: var(--edit-color); color: white; border: none; padding: 8px 12px; border-radius: 6px; font-weight: bold; font-size: 0.85rem; cursor: pointer; }
+.btn-small-action { padding: 6px 12px; font-size: 0.9rem; border: none; border-radius: 6px; font-weight: bold; color: white; cursor: pointer; }
+.btn-small-blue { background: var(--score-blue); }
+.btn-small-green { background: #4caf50; }
+.btn-small-orange { background: #ff9800; }
+.btn-small-purple { background: #673ab7; }
+.btn-small-gray { background: #999; }
+.btn-import-label { background: #ff9800; text-align: center; cursor: pointer; padding: 10px; font-size: 0.9rem; border-radius: 8px; color: white; font-weight: bold; display: inline-block; box-sizing: border-box;}
+
+.player-furigana { font-size: 0.8rem; color: #666; margin: 0 0 -5px 0; }
+.modal-section-label { display: block; margin-top: 10px; border-top: 1px dashed #ccc; padding-top: 10px; font-weight: bold; color: var(--grass-green); font-size: 0.85rem;}
+.participant-list-container { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+.empty-participants { font-size: 0.85rem; color: #999; }
+.btn-delete-game { background: var(--danger-color); color: white; border: none; padding: 14px; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer; }
+.score-action-container { display: flex; flex-direction: column; gap: 10px; margin-top: 15px; }
+
+.flex-select { flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+.th-left { text-align: left !important; }
+.td-center-bold { font-weight: bold; text-align: center; }
+.player-pos-sub { color: #666; font-size: 0.75rem; }
+.modal-vs-title { font-weight: bold; color: var(--grass-green); font-size: 1rem; margin: 0; }
+.modal-vs-title-lg { font-weight: bold; color: var(--grass-green); font-size: 1.1rem; margin-bottom: 5px; }
+
+.large-select { font-size: 1.1rem; padding: 12px; border: 1px solid #ddd; border-radius: 6px; }
+.checkbox-label-row { display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 15px; font-size: 0.9rem; }
+
+.admin-note { color: #999; font-size: 0.8rem; }
+.member-list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; }
+.member-name-text { font-size: 0.95rem; font-weight: bold; }
+.admin-badge-orange { background: #e65100; margin-left: 0; }
+.viewer-badge { font-size: 0.75rem; color: #666; }
+.member-scroll-container { max-height: 40vh; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 15px; }
+
+.record-year-select { margin: 0 auto 10px auto; display: block; width: 150px; padding: 8px; border-radius: 6px; border: 1px solid #ddd; }
+.filter-container { margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
+.filter-label { font-weight: bold; color: var(--grass-green); }
+.filter-select { width: auto; padding: 8px; font-size: 1rem; flex: 1; border: 1px solid #ddd; border-radius: 6px; }
+.stats-h3 { color: var(--grass-green); }
+.td-left-bold { text-align: left; font-weight: bold; }
+.td-highlight-green { font-weight: bold; color: var(--grass-green); font-size: 1.1rem; }
+.td-highlight-blue { font-weight: bold; color: var(--score-blue); font-size: 1.1rem; }
+.empty-text { font-size: 0.85rem; color: #666; }
