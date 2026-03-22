@@ -19,7 +19,7 @@ const auth = firebase.auth();
  */
 let currentUser = null;       
 let currentTeamId = null;
-let currentTeamAdmins = []; // 🌟 現在のチームの管理者リストを保持
+let currentTeamAdmins = [];
 
 const positionOptions = ["P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH"];
 const lineupPositionOptions = ["P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH", "EH", "ベンチ"];
@@ -41,24 +41,30 @@ let isGameDeleteMode = false;
  */
 function showScreen(screenId) {
     document.querySelectorAll('.app-screen').forEach(sec => {
-        sec.style.display = 'none';
         sec.classList.remove('active');
     });
     const target = document.getElementById(screenId);
     if(target) {
-        target.style.display = 'block';
         target.classList.add('active');
     }
 }
 
 /**
- * 🌟 Firebase 認証（ログイン・ログアウト・アカウント削除）
+ * 🌟 Firebase 認証（ログイン・ログアウト・アカウント関連）
  */
 auth.onAuthStateChanged(async (user) => {
     if (user) {
         currentUser = user;
-        // 🌟 権限管理で誰か判別できるよう、ユーザーのメアドをデータベースに保存
-        await db.collection("users").doc(user.uid).set({ email: user.email }, { merge: true });
+        
+        // 🌟 表示名（ニックネーム）の取得と初期化
+        const uDoc = await db.collection("users").doc(user.uid).get();
+        if (uDoc.exists && uDoc.data().name) {
+            document.getElementById('edit-username-input').value = uDoc.data().name;
+        } else {
+            await db.collection("users").doc(user.uid).set({ email: user.email, name: "名無しプレーヤー" }, { merge: true });
+            document.getElementById('edit-username-input').value = "名無しプレーヤー";
+        }
+        
         showScreen('mypage-screen');
         loadUserTeams(); 
     } else {
@@ -72,6 +78,7 @@ auth.onAuthStateChanged(async (user) => {
 async function loginWithEmail() {
     const email = document.getElementById('email-input').value;
     const password = document.getElementById('password-input').value;
+    const userName = document.getElementById('username-input').value || "名無しプレーヤー";
     
     if(!email || !password) return alert("メールアドレスとパスワードを入力してください");
     
@@ -81,7 +88,9 @@ async function loginWithEmail() {
         if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-login-credentials') {
             if(confirm("アカウントが見つかりません。入力した内容で新規登録しますか？")) {
                 try {
-                    await auth.createUserWithEmailAndPassword(email, password);
+                    const userCred = await auth.createUserWithEmailAndPassword(email, password);
+                    // 新規登録時に名前を保存
+                    await db.collection("users").doc(userCred.user.uid).set({ email: email, name: userName }, { merge: true });
                     alert("新規登録が完了しました！");
                 } catch(e) { 
                     alert("登録エラー: " + e.message); 
@@ -99,14 +108,12 @@ function logout() {
     }
 }
 
-// 🌟 今回追加：アカウント削除機能
 async function deleteAccount() {
     if (!confirm("⚠️本当にアカウントを削除しますか？\nこの操作は取り消せません。\n（※所属チームのデータ自体は消えませんが、あなたのログイン情報は完全に削除され、アプリに入れなくなります）")) return;
 
     try {
         await currentUser.delete();
         alert("アカウントを削除しました。ご利用ありがとうございました。");
-        // ※削除成功すると onAuthStateChanged が発動し、自動でログイン画面に戻ります
     } catch (error) {
         if (error.code === 'auth/requires-recent-login') {
             alert("🔒 セキュリティのため、アカウントを削除するには「一度ログアウトし、再度ログイン」し直してからすぐに実行してください。");
@@ -116,11 +123,21 @@ async function deleteAccount() {
     }
 }
 
+// 🌟 表示名の変更処理
+async function updateUserName() {
+    const newName = document.getElementById('edit-username-input').value.trim();
+    if (!newName) return alert("表示名を入力してください");
+    try {
+        await db.collection("users").doc(currentUser.uid).update({ name: newName });
+        alert("表示名を更新しました！");
+    } catch (e) {
+        alert("更新に失敗しました: " + e.message);
+    }
+}
 
 /**
  * 🌟 権限管理（モラル対策）のブロック機能
  */
-// 編集や保存をする前に、この関数で「管理者かどうか」をチェックします
 function checkAdmin() {
     if (!currentTeamAdmins.includes(currentUser.uid)) {
         alert("【閲覧専用モード】\nデータの追加・編集・削除には「管理者権限」が必要です。\nチームの作成者（監督）に権限の付与を依頼してください。");
@@ -164,8 +181,8 @@ function showCreateTeamModal() {
     document.getElementById('modal-title').innerText = "新しいチームを作成";
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
-            <input type="text" id="new-team-name" placeholder="チーム名を入力" style="font-size: 1.1rem; padding: 12px;">
-            <div class="modal-btns" style="margin-top: 20px;">
+            <input type="text" id="new-team-name" class="large-select w-100" placeholder="チーム名を入力">
+            <div class="modal-btns mt-20">
                 <button class="btn-save" onclick="createNewTeam()">作成する</button>
             </div>
         </div>
@@ -238,13 +255,15 @@ async function selectTeam(teamId, teamName) {
         const doc = await db.collection("teams").doc(teamId).get();
         const data = doc.data();
         
-        // 🌟 チームの管理者リストを変数に記憶する
         currentTeamAdmins = data.admins || [];
         
-        // 🌟 自分が管理者なら「メンバー管理ボタン」を表示する
         const manageBtn = document.getElementById('manage-members-btn');
         if(manageBtn) {
-            manageBtn.style.display = currentTeamAdmins.includes(currentUser.uid) ? 'block' : 'none';
+            if(currentTeamAdmins.includes(currentUser.uid)){
+                manageBtn.classList.remove('hidden');
+            } else {
+                manageBtn.classList.add('hidden');
+            }
         }
 
         players = data.players || [];
@@ -276,7 +295,7 @@ function backToMyPage() {
 }
 
 /**
- * 🌟 今回追加：メンバー・権限管理モーダルの表示と操作
+ * 🌟 メンバー・権限管理機能（表示名に対応）
  */
 async function showMemberManagementModal() {
     if (!currentTeamId) return;
@@ -284,7 +303,6 @@ async function showMemberManagementModal() {
     document.getElementById('modal-overlay').style.display = 'flex';
 
     try {
-        // 最新のチーム情報を取得
         const doc = await db.collection("teams").doc(currentTeamId).get();
         const teamData = doc.data();
         const members = teamData.members || [];
@@ -292,12 +310,14 @@ async function showMemberManagementModal() {
 
         let memberListHtml = '';
         
-        // メンバー全員のメールアドレスを users コレクションから取得
         for (let uid of members) {
-            let email = "不明なユーザー";
+            let displayName = "不明なユーザー";
             try {
                 const uDoc = await db.collection("users").doc(uid).get();
-                if(uDoc.exists) email = uDoc.data().email;
+                if(uDoc.exists) {
+                    const d = uDoc.data();
+                    displayName = d.name ? d.name : "名無しプレーヤー";
+                }
             } catch(e){}
 
             const isAdmin = admins.includes(uid);
@@ -306,19 +326,19 @@ async function showMemberManagementModal() {
             let actionHtml = '';
             if (isAdmin) {
                 if (admins.length === 1 && isMe) {
-                    actionHtml = `<span style="color:#999; font-size:0.8rem;">※最後の管理者です</span>`;
+                    actionHtml = `<span class="admin-note">※最後の管理者です</span>`;
                 } else {
-                    actionHtml = `<button class="btn-delete" style="padding:4px 8px; font-size:0.8rem;" onclick="toggleAdmin('${uid}', false)">管理者を外す</button>`;
+                    actionHtml = `<button class="btn-delete btn-small" onclick="toggleAdmin('${uid}', false)">管理者を外す</button>`;
                 }
             } else {
-                actionHtml = `<button class="btn-edit-mode" style="padding:4px 8px; font-size:0.8rem; background:#1976d2;" onclick="toggleAdmin('${uid}', true)">管理者にする</button>`;
+                actionHtml = `<button class="btn-small-action btn-small-blue" onclick="toggleAdmin('${uid}', true)">管理者にする</button>`;
             }
 
             memberListHtml += `
-                <div style="display:flex; justify-content:space-between; align-items:center; padding:12px; border-bottom:1px solid #eee;">
+                <div class="member-list-item">
                     <div>
-                        <div style="font-size:0.95rem; font-weight:bold;">${email}</div>
-                        ${isAdmin ? '<span class="admin-badge" style="margin-left:0; background:#e65100;">管理者</span>' : '<span style="font-size:0.75rem; color:#666;">閲覧のみ</span>'}
+                        <div class="member-name-text">${displayName}</div>
+                        ${isAdmin ? '<span class="admin-badge admin-badge-orange">管理者</span>' : '<span class="viewer-badge">閲覧のみ</span>'}
                     </div>
                     <div>${actionHtml}</div>
                 </div>
@@ -328,8 +348,8 @@ async function showMemberManagementModal() {
         document.getElementById('modal-title').innerText = "チームメンバーと権限の管理";
         document.getElementById('modal-body').innerHTML = `
             <div class="edit-form">
-                <p style="font-size:0.85rem; color:#666; margin-bottom:15px;">「管理者にする」を押すと、そのメンバーもスコア入力や選手編集ができるようになります。</p>
-                <div style="max-height: 40vh; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 15px;">
+                <p class="help-text mb-15">「管理者にする」を押すと、そのメンバーもスコア入力や選手編集ができるようになります。</p>
+                <div class="member-scroll-container">
                     ${memberListHtml}
                 </div>
                 <div class="modal-btns">
@@ -343,7 +363,6 @@ async function showMemberManagementModal() {
     }
 }
 
-// 権限の付与・剥奪処理
 async function toggleAdmin(uid, makeAdmin) {
     if(!confirm(makeAdmin ? "このメンバーを管理者にしますか？" : "このメンバーから管理者権限を外しますか？（閲覧のみになります）")) return;
     
@@ -357,7 +376,6 @@ async function toggleAdmin(uid, makeAdmin) {
                 admins: firebase.firestore.FieldValue.arrayRemove(uid)
             });
         }
-        // 画面を再描画
         showMemberManagementModal();
     } catch(e) {
         alert("権限の変更に失敗しました。");
@@ -383,7 +401,6 @@ window.onload = function() {
         if (el) {
             el.addEventListener('change', async (e) => {
                 if (!checkAdmin()) {
-                    // 権限がなければ変更を取り消す
                     e.target.value = e.target.defaultValue;
                     return; 
                 }
@@ -487,7 +504,7 @@ function showAddPlayerModal() {
 }
 
 function addPlayer() {
-    if (!checkAdmin()) return; // 🌟 権限チェック
+    if (!checkAdmin()) return;
 
     const name = document.getElementById('p-name').value;
     const furigana = document.getElementById('p-furigana').value; 
@@ -532,7 +549,7 @@ function showPlayerDetail(id) {
     if(!p) return;
     currentEditingPlayerId = id;
 
-    const furiHtml = p.furigana ? `<p style="font-size:0.8rem; color:#666; margin:0 0 -5px 0;">${p.furigana}</p>` : '';
+    const furiHtml = p.furigana ? `<p class="player-furigana">${p.furigana}</p>` : '';
 
     document.getElementById('modal-title').innerText = "選手情報";
     document.getElementById('modal-body').innerHTML = `
@@ -585,7 +602,7 @@ function showEditForm(id) {
 }
 
 function updatePlayer() {
-    if (!checkAdmin()) return; // 🌟 権限チェック
+    if (!checkAdmin()) return;
 
     const p = players.find(player => player.id === currentEditingPlayerId);
     if (!p) return;
@@ -626,7 +643,7 @@ function updatePlayer() {
 }
 
 function deletePlayer(id) {
-    if (!checkAdmin()) return; // 🌟 権限チェック
+    if (!checkAdmin()) return;
 
     if(confirm("この選手を削除しますか？")) {
         players = players.filter(p => p.id !== id);
@@ -696,16 +713,16 @@ function showAddGameModal(gameId = null) {
                 <option value="後攻" ${g.side==='後攻'?'selected':''}>後攻</option>
             </select>
 
-            <label style="margin-top: 10px; border-top: 1px dashed #ccc; padding-top: 10px;">当日の参加者:</label>
-            <p style="font-size: 0.8rem; color: #666; margin: 0 0 10px 0;">※デフォルトで全選手が登録されています。欠席者を「✖」で外してください。</p>
+            <label class="modal-section-label">当日の参加者:</label>
+            <p class="help-text mb-10">※デフォルトで全選手が登録されています。欠席者を「✖」で外してください。</p>
             
-            <div style="display:flex; gap:8px;">
-                <select id="g-participant-select" style="flex:1;"></select>
-                <button type="button" class="btn-edit-mode" style="padding: 8px 16px; font-size: 0.9rem;" onclick="addParticipant()">追加</button>
+            <div class="flex-gap-8">
+                <select id="g-participant-select" class="flex-1"></select>
+                <button type="button" class="btn-small-action btn-small-gray" onclick="addParticipant()">追加</button>
             </div>
-            <div id="g-participants-list" style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px;"></div>
+            <div id="g-participants-list" class="participant-list-container"></div>
 
-            <div class="modal-btns" style="margin-top: 20px;">
+            <div class="modal-btns mt-20">
                 <button class="btn-save" onclick="processGame(${gameId})">${isEdit ? '変更を保存する' : '試合を作成する'}</button>
             </div>
         </div>
@@ -728,7 +745,7 @@ function renderParticipants() {
     selectEl.innerHTML = optionsHtml;
 
     if (tempParticipants.length === 0) {
-        listEl.innerHTML = '<span style="font-size:0.85rem; color:#999;">参加者がいません</span>';
+        listEl.innerHTML = '<span class="empty-participants">参加者がいません</span>';
     } else {
         listEl.innerHTML = tempParticipants.map(pid => {
             const p = players.find(pl => String(pl.id) === String(pid));
@@ -753,7 +770,7 @@ function removeParticipant(pid) {
 }
 
 function processGame(gameId) {
-    if (!checkAdmin()) return; // 🌟 権限チェック
+    if (!checkAdmin()) return;
 
     const date = document.getElementById('g-date').value;
     const opponent = document.getElementById('g-opponent').value;
@@ -805,7 +822,7 @@ function renderGameList() {
         const weatherIcon = g.weather === '晴れ' ? '☀️' : g.weather === '曇り' ? '☁️' : g.weather === '雨' ? '☔' : '❓';
         const pCount = g.participants ? g.participants.length : 0; 
         
-        const deleteBtnHtml = isGameDeleteMode ? `<button class="btn-delete" style="width:100%; margin-top:8px;" onclick="deleteGame(${g.id})">この試合を削除</button>` : '';
+        const deleteBtnHtml = isGameDeleteMode ? `<button class="btn-delete-game mt-10 w-100" onclick="deleteGame(${g.id})">この試合を削除</button>` : '';
 
         return `
             <div class="game-card">
@@ -816,9 +833,9 @@ function renderGameList() {
                 <p>📅 ${g.date} (${g.side}) | 📍 ${g.location} | 👥 参加: ${pCount}名</p>
                 <p class="score-text">スコア: ${g.score.us} - ${g.score.them}${resultText}</p>
                 
-                <div class="game-card-btns" style="margin-top: 15px; display: flex; gap: 10px;">
-                    <button class="btn-score" style="background:#1976d2; flex:1;" onclick="showLineupModal(${g.id})">スタメン・打順</button>
-                    <button class="btn-edit-mode" style="flex:1;" onclick="showAddGameModal(${g.id})">試合情報の編集</button>
+                <div class="game-card-btns mt-15">
+                    <button class="btn-small-action btn-small-blue flex-1 p-10" onclick="showLineupModal(${g.id})">スタメン・打順</button>
+                    <button class="btn-small-action btn-small-gray flex-1 p-10" onclick="showAddGameModal(${g.id})">試合情報の編集</button>
                 </div>
                 ${deleteBtnHtml}
             </div>`;
@@ -836,11 +853,11 @@ function renderGameList() {
                 <p>📅 ${g.date} | 📍 ${g.location}</p>
                 <p class="score-text large">スコア: ${g.score.us} - ${g.score.them}</p>
                 
-                <div style="display:flex; flex-direction:column; gap:10px; margin-top:15px;">
-                    <button class="btn-score" style="background:#4caf50; width:100%;" onclick="showScoreInputModal(${g.id})">イニングスコアボード</button>
-                    <div style="display:flex; gap:10px;">
-                        <button class="btn-score" style="background:#ff9800; flex:1;" onclick="showAtBatMatrixModal(${g.id})">打席成績</button>
-                        <button class="btn-score" style="background:#673ab7; flex:1;" onclick="showPitcherModal(${g.id})">投手成績</button>
+                <div class="score-action-container">
+                    <button class="btn-small-action btn-small-green w-100 p-10" onclick="showScoreInputModal(${g.id})">イニングスコアボード</button>
+                    <div class="flex-gap-8">
+                        <button class="btn-small-action btn-small-orange flex-1 p-10" onclick="showAtBatMatrixModal(${g.id})">打席成績</button>
+                        <button class="btn-small-action btn-small-purple flex-1 p-10" onclick="showPitcherModal(${g.id})">投手成績</button>
                     </div>
                 </div>
             </div>`;
@@ -864,7 +881,7 @@ function showLineupModal(gameId) {
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
             <div id="lineup-wrapper"></div>
-            <button class="btn-edit-mode" style="padding: 6px; font-size: 0.9rem; margin-top: 10px; background:#4caf50;" onclick="addLineupRow()">＋ 打者を追加</button>
+            <button class="btn-small-action btn-small-green mt-10" onclick="addLineupRow()">＋ 打者を追加</button>
             <div class="modal-btns">
                 <button class="btn-save" onclick="saveLineup()">スタメンを保存</button>
             </div>
@@ -929,7 +946,7 @@ function removeLineupRow(index) {
 }
 
 function saveLineup() {
-    if (!checkAdmin()) return; // 🌟 権限チェック
+    if (!checkAdmin()) return;
 
     const filteredLineup = tempLineup.filter(item => item.playerId !== "");
     filteredLineup.forEach(item => { if (!item.results) item.results = []; });
@@ -955,9 +972,9 @@ function showPitcherModal(gameId) {
     document.getElementById('modal-title').innerText = `投手成績 (vs ${currentGameForScore.opponent})`;
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
-            <p style="font-size: 0.8rem; color: #666; margin-bottom:10px;">登板した投手の成績を入力してください。</p>
+            <p class="help-text mb-10">登板した投手の成績を入力してください。</p>
             <div id="pitcher-wrapper"></div>
-            <button class="btn-edit-mode" style="padding: 6px; font-size: 0.9rem; margin-top: 10px; background:#4caf50;" onclick="addPitcherRow()">＋ 投手を登録</button>
+            <button class="btn-small-action btn-small-green mt-10" onclick="addPitcherRow()">＋ 投手を登録</button>
             <div class="modal-btns">
                 <button class="btn-save" onclick="savePitchers()">投手成績を保存</button>
             </div>
@@ -976,8 +993,8 @@ function renderPitcherRows() {
         row.className = "pitcher-row";
         
         row.innerHTML = `
-            <div style="margin-bottom:8px; display:flex; gap:8px;">
-                <select style="flex:1; padding:8px;" onchange="updatePitcher(${index}, 'playerId', this.value)">
+            <div class="flex-gap-8 mb-8">
+                <select class="flex-select" onchange="updatePitcher(${index}, 'playerId', this.value)">
                     <option value="">-- 投手を選択 --</option>
                     ${players.map(p => {
                         const isSelected = tempPitchers.some((t, i) => i !== index && String(t.playerId) === String(p.id));
@@ -1035,7 +1052,7 @@ function removePitcherRow(index) {
 }
 
 function savePitchers() {
-    if (!checkAdmin()) return; // 🌟 権限チェック
+    if (!checkAdmin()) return;
 
     const filtered = tempPitchers.filter(item => item.playerId !== "");
     currentGameForScore.pitchers = filtered;
@@ -1069,7 +1086,7 @@ function showAtBatMatrixModal(gameId) {
 function renderAtBatMatrix() {
     const g = currentGameForScore;
 
-    let headerHtml = `<th>順</th><th style="text-align:left;">選手</th>`;
+    let headerHtml = `<th>順</th><th class="th-left">選手</th>`;
     for(let i=0; i<currentAtBatColumns; i++) {
         headerHtml += `<th>第${i+1}打席</th>`;
     }
@@ -1092,9 +1109,9 @@ function renderAtBatMatrix() {
         }
 
         return `<tr>
-            <td style="font-weight:bold; text-align:center;">${lineIdx+1}</td>
+            <td class="td-center-bold">${lineIdx+1}</td>
             <td class="team-name">
-                ${pName}<br><span style="color:#666; font-size:0.75rem;">${item.position}</span>
+                ${pName}<br><span class="player-pos-sub">${item.position}</span>
             </td>
             ${colsHtml}
         </tr>`;
@@ -1103,8 +1120,8 @@ function renderAtBatMatrix() {
     document.getElementById('modal-title').innerText = "打席成績の入力";
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
-            <p style="font-weight:bold; color:var(--grass-green); font-size:1rem; margin:0;">vs ${g.opponent}</p>
-            <p style="font-size: 0.8rem; color: #666; margin-bottom:10px;">入力したい打席の枠をタップしてください。</p>
+            <p class="modal-vs-title">vs ${g.opponent}</p>
+            <p class="help-text mb-10">入力したい打席の枠をタップしてください。</p>
 
             <div class="score-table-container">
                 <table class="score-table atbat-table">
@@ -1113,9 +1130,9 @@ function renderAtBatMatrix() {
                 </table>
             </div>
 
-            <button class="btn-edit-mode" style="padding: 8px; font-size: 0.9rem;" onclick="addAtBatColumn()">＋ 右に打席列を追加</button>
+            <button class="btn-small-action btn-small-gray" onclick="addAtBatColumn()">＋ 右に打席列を追加</button>
 
-            <div class="modal-btns" style="margin-top: 15px;">
+            <div class="modal-btns mt-15">
                 <button class="btn-save" onclick="saveAndRefreshGames(); closeModal();">閉じる（自動保存済）</button>
             </div>
         </div>
@@ -1141,28 +1158,28 @@ function openAtBatInput(lineIdx, atBatIdx) {
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
             <label>結果:</label>
-            <select id="ab-result" style="font-size:1.1rem; padding:12px;">
+            <select id="ab-result" class="large-select">
                 ${resultOptions.map(opt => `<option value="${opt}" ${currentRes.result === opt ? 'selected' : ''}>${opt === '' ? '-- 選択してください --' : opt}</option>`).join('')}
             </select>
 
-            <div style="display:flex; gap:10px; margin-top: 10px;">
-                <div style="flex:1;">
+            <div class="flex-gap-8 mt-10">
+                <div class="flex-1">
                     <label>打点:</label>
-                    <select id="ab-rbi" style="font-size:1.1rem; padding:12px; width:100%;">
+                    <select id="ab-rbi" class="large-select w-100">
                         ${[0,1,2,3,4].map(n => `<option value="${n}" ${Number(currentRes.rbi) === n ? 'selected' : ''}>${n}</option>`).join('')}
                     </select>
                 </div>
-                <div style="flex:1;">
+                <div class="flex-1">
                     <label>盗塁:</label>
-                    <select id="ab-steal" style="font-size:1.1rem; padding:12px; width:100%;">
+                    <select id="ab-steal" class="large-select w-100">
                         ${[0,1,2,3,4].map(n => `<option value="${n}" ${Number(currentRes.steal) === n ? 'selected' : ''}>${n}</option>`).join('')}
                     </select>
                 </div>
             </div>
 
-            <div class="modal-btns" style="margin-top:20px;">
-                <button class="btn-save" style="background:#1976d2;" onclick="saveAndNextAtBat(${lineIdx}, ${atBatIdx})">決定して次の打者へ ➡</button>
-                <button class="btn-save" style="background:#4caf50;" onclick="saveAtBatInput(${lineIdx}, ${atBatIdx})">決定して表に戻る</button>
+            <div class="modal-btns mt-20">
+                <button class="btn-save-blue btn-save" style="background:#1976d2;" onclick="saveAndNextAtBat(${lineIdx}, ${atBatIdx})">決定して次の打者へ ➡</button>
+                <button class="btn-save-green btn-save" style="background:#4caf50;" onclick="saveAtBatInput(${lineIdx}, ${atBatIdx})">決定して表に戻る</button>
                 <button class="btn-delete" onclick="clearAtBatInput(${lineIdx}, ${atBatIdx})">この打席を空欄にする</button>
                 <button class="btn-edit-mode" style="background:#999;" onclick="renderAtBatMatrix()">キャンセル</button>
             </div>
@@ -1171,7 +1188,7 @@ function openAtBatInput(lineIdx, atBatIdx) {
 }
 
 function saveAndNextAtBat(lineIdx, atBatIdx) {
-    if (!checkAdmin()) return; // 🌟 権限チェック
+    if (!checkAdmin()) return;
 
     const res = document.getElementById('ab-result').value;
     const rbi = document.getElementById('ab-rbi').value;
@@ -1197,7 +1214,7 @@ function saveAndNextAtBat(lineIdx, atBatIdx) {
 }
 
 function saveAtBatInput(lineIdx, atBatIdx) {
-    if (!checkAdmin()) return; // 🌟 権限チェック
+    if (!checkAdmin()) return;
 
     const res = document.getElementById('ab-result').value;
     const rbi = document.getElementById('ab-rbi').value;
@@ -1209,7 +1226,7 @@ function saveAtBatInput(lineIdx, atBatIdx) {
 }
 
 function clearAtBatInput(lineIdx, atBatIdx) {
-    if (!checkAdmin()) return; // 🌟 権限チェック
+    if (!checkAdmin()) return;
 
     currentGameForScore.lineup[lineIdx].results[atBatIdx] = { result: "", rbi: 0, steal: 0 };
     saveAndRefreshGames();
@@ -1226,14 +1243,14 @@ function showScoreInputModal(gameId) {
     document.getElementById('modal-title').innerText = "イニングスコア入力";
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
-            <p style="font-weight:bold; color:var(--grass-green); font-size:1.1rem; margin-bottom:5px;">vs ${currentGameForScore.opponent}</p>
+            <p class="modal-vs-title-lg">vs ${currentGameForScore.opponent}</p>
             <div id="score-board-wrapper"></div>
-            <button class="btn-edit-mode" style="padding: 6px; font-size: 0.9rem; margin-top: 10px;" onclick="addInning()">＋ イニング追加</button>
-            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-top:15px;">
+            <button class="btn-small-action btn-small-gray mt-10" onclick="addInning()">＋ イニング追加</button>
+            <label class="checkbox-label-row">
                 <input type="checkbox" id="s-finished" class="chk-finished" ${currentGameForScore.isFinished ? 'checked' : ''}>
                 この試合を終了とする（集計に反映）
             </label>
-            <div class="modal-btns"><button class="btn-save" onclick="saveScoreBoard()">スコアを保存する</button></div>
+            <div class="modal-btns mt-20"><button class="btn-save" onclick="saveScoreBoard()">スコアを保存する</button></div>
         </div>
     `;
     renderScoreBoardTable();
@@ -1275,7 +1292,7 @@ function addInning() {
 }
 
 function saveScoreBoard() {
-    if (!checkAdmin()) return; // 🌟 権限チェック
+    if (!checkAdmin()) return;
 
     const g = currentGameForScore;
     g.score.us = g.innings.reduce((sum, inn) => sum + (parseInt(inn.us) || 0), 0);
@@ -1287,7 +1304,7 @@ function saveScoreBoard() {
 }
 
 function deleteGame(id) {
-    if (!checkAdmin()) return; // 🌟 権限チェック
+    if (!checkAdmin()) return;
 
     if(confirm("試合情報を削除しますか？")) {
         games = games.filter(g => g.id !== id);
@@ -1330,16 +1347,15 @@ function setupBackupUI() {
     if (!teamPage) return;
 
     const backupDiv = document.createElement('div');
-    backupDiv.className = 'card';
-    backupDiv.style.marginTop = '20px';
+    backupDiv.className = 'card mt-20';
     backupDiv.innerHTML = `
         <h3>データ管理（クラウド連携済）</h3>
-        <p style="font-size: 0.85rem; color: #666;">データは自動的にクラウドに保存されています。過去にJSON形式で書き出したデータをこのチームに流し込む場合は「復元」を押してください。</p>
-        <div style="display: flex; gap: 10px; margin-top: 15px;">
-            <button class="btn-score" style="background:#1976d2; flex: 1; padding: 10px; font-size: 0.9rem;" onclick="exportData()">📥 今のデータを書き出す</button>
-            <label class="btn-edit-mode" style="background:#ff9800; flex: 1; text-align: center; cursor: pointer; padding: 10px; font-size: 0.9rem; border-radius: 8px; color: white; font-weight: bold;">
+        <p class="help-text">データは自動的にクラウドに保存されています。過去にJSON形式で書き出したデータをこのチームに流し込む場合は「復元」を押してください。</p>
+        <div class="flex-gap-8 mt-15">
+            <button class="btn-small-action btn-small-blue flex-1 p-10" onclick="exportData()">📥 今のデータを書き出す</button>
+            <label class="btn-import-label flex-1 p-10">
                 📤 過去のデータを復元
-                <input type="file" accept=".json" style="display: none;" onchange="importData(event)">
+                <input type="file" accept=".json" class="hidden" onchange="importData(event)">
             </label>
         </div>
     `;
@@ -1411,9 +1427,6 @@ function importData(event) {
     reader.readAsText(file);
 }
 
-/**
- * 使い方モーダルの表示
- */
 function showHelpModal(pageId) {
     const helpData = {
         team: {
@@ -1476,12 +1489,7 @@ function updateTeamRecord() {
     if (!selectEl) {
         selectEl = document.createElement('select');
         selectEl.id = 'record-year-select';
-        selectEl.style.margin = '0 auto 10px auto';
-        selectEl.style.display = 'block';
-        selectEl.style.width = '150px';
-        selectEl.style.padding = '8px';
-        selectEl.style.borderRadius = '6px';
-        selectEl.style.border = '1px solid #ddd';
+        selectEl.className = 'record-year-select';
         selectEl.onchange = function() {
             currentRecordYear = this.value;
             updateTeamRecord();
@@ -1521,9 +1529,9 @@ function renderStatsPage() {
     });
 
     const filterHtml = `
-        <div style="margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
-            <label style="font-weight: bold; color: var(--grass-green);">表示シーズン:</label>
-            <select id="stats-year-select" style="width: auto; padding: 8px; font-size: 1rem; flex: 1;" onchange="changeStatsYear(this.value)">
+        <div class="filter-container">
+            <label class="filter-label">表示シーズン:</label>
+            <select id="stats-year-select" class="filter-select" onchange="changeStatsYear(this.value)">
                 ${yearOptionsHtml}
             </select>
         </div>
@@ -1637,14 +1645,14 @@ function renderStatsPage() {
 
     let html = filterHtml;
 
-    html += `<h3 style="color:var(--grass-green); margin-top:10px;">打撃成績</h3>`;
+    html += `<h3 class="stats-h3 mt-10">打撃成績</h3>`;
     html += `
         <div class="table-container">
             <table>
                 <thead>
                     <tr>
                         <th>背番</th>
-                        <th style="text-align:left;">氏名</th>
+                        <th class="th-left">氏名</th>
                         <th>打率</th>
                         <th>試合</th>
                         <th>打席</th>
@@ -1661,8 +1669,8 @@ function renderStatsPage() {
                     ${bStatsArray.map(s => `
                         <tr>
                             <td>${s.number}</td>
-                            <td style="text-align:left; font-weight:bold;">${s.name}</td>
-                            <td style="font-weight:bold; color:var(--grass-green); font-size:1.1rem;">${s.avg}</td>
+                            <td class="td-left-bold">${s.name}</td>
+                            <td class="td-highlight-green">${s.avg}</td>
                             <td>${s.games}</td>
                             <td>${s.pa}</td>
                             <td>${s.ab}</td>
@@ -1679,9 +1687,9 @@ function renderStatsPage() {
         </div>
     `;
 
-    html += `<h3 style="color:var(--grass-green); margin-top:25px;">投手成績</h3>`;
+    html += `<h3 class="stats-h3 mt-25">投手成績</h3>`;
     if (pStatsArray.length === 0) {
-        html += `<p style="font-size:0.85rem; color:#666;">投手記録がありません。</p>`;
+        html += `<p class="empty-text">投手記録がありません。</p>`;
     } else {
         html += `
             <div class="table-container">
@@ -1689,7 +1697,7 @@ function renderStatsPage() {
                     <thead>
                         <tr>
                             <th>背番</th>
-                            <th style="text-align:left;">氏名</th>
+                            <th class="th-left">氏名</th>
                             <th>防御率</th>
                             <th>登板</th>
                             <th>投球回</th>
@@ -1702,8 +1710,8 @@ function renderStatsPage() {
                         ${pStatsArray.map(s => `
                             <tr>
                                 <td>${s.number}</td>
-                                <td style="text-align:left; font-weight:bold;">${s.name}</td>
-                                <td style="font-weight:bold; color:#1976d2; font-size:1.1rem;">${s.era}</td>
+                                <td class="td-left-bold">${s.name}</td>
+                                <td class="td-highlight-blue">${s.era}</td>
                                 <td>${s.games}</td>
                                 <td>${s.ipDisplay}</td>
                                 <td>${s.er}</td>
