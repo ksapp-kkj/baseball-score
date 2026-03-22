@@ -339,7 +339,7 @@ function backToMyPage() {
 }
 
 /**
- * 🌟 メンバー・権限管理機能
+ * 🌟 メンバー・権限管理機能（表示名とメールアドレス表示）
  */
 async function showMemberManagementModal() {
     if (!currentTeamId) return;
@@ -370,14 +370,23 @@ async function showMemberManagementModal() {
             const isMe = uid === currentUser.uid;
 
             let actionHtml = '';
+            let removeHtml = '';
+
             if (isAdmin) {
                 if (admins.length === 1 && isMe) {
                     actionHtml = `<span class="admin-note">※最後の管理者です</span>`;
                 } else {
-                    actionHtml = `<button class="btn-delete btn-small" onclick="toggleAdmin('${uid}', false)">管理者を外す</button>`;
+                    actionHtml = `<button class="btn-small-action btn-small-gray" onclick="toggleAdmin('${uid}', false)">管理者を外す</button>`;
+                    removeHtml = `<button class="btn-small-action" style="background:var(--danger-color);" onclick="removeMemberFromTeam('${uid}')">削除</button>`;
                 }
             } else {
                 actionHtml = `<button class="btn-small-action btn-small-blue" onclick="toggleAdmin('${uid}', true)">管理者にする</button>`;
+                removeHtml = `<button class="btn-small-action" style="background:var(--danger-color);" onclick="removeMemberFromTeam('${uid}')">削除</button>`;
+            }
+
+            // 自分自身は「削除」ボタンを出さない（退会機能を使ってもらうため）
+            if (isMe) {
+                removeHtml = '';
             }
 
             memberListHtml += `
@@ -387,7 +396,10 @@ async function showMemberManagementModal() {
                         <div style="font-size:0.75rem; color:#999; margin-bottom:3px;">${email}</div>
                         ${isAdmin ? '<span class="admin-badge admin-badge-orange">管理者</span>' : '<span class="viewer-badge">閲覧のみ</span>'}
                     </div>
-                    <div>${actionHtml}</div>
+                    <div class="flex-gap-8">
+                        ${actionHtml}
+                        ${removeHtml}
+                    </div>
                 </div>
             `;
         }
@@ -395,7 +407,7 @@ async function showMemberManagementModal() {
         document.getElementById('modal-title').innerText = "チームメンバーと権限の管理";
         document.getElementById('modal-body').innerHTML = `
             <div class="edit-form">
-                <p class="help-text mb-15">「管理者にする」を押すと、そのメンバーもスコア入力などができるようになります。メンバーがログインIDを忘れた場合は、上記のメールアドレスを教えてあげてください。</p>
+                <p class="help-text mb-15">不要なアカウントや幽霊データは「削除」ボタンでチームから外すことができます。</p>
                 <div class="member-scroll-container">
                     ${memberListHtml}
                 </div>
@@ -426,6 +438,22 @@ async function toggleAdmin(uid, makeAdmin) {
         showMemberManagementModal();
     } catch(e) {
         alert("権限の変更に失敗しました。");
+    }
+}
+
+// 🌟 新規追加：メンバーをチームから外す機能
+async function removeMemberFromTeam(uid) {
+    if(!confirm("このユーザーをチームから削除（追放）しますか？")) return;
+    
+    try {
+        await db.collection("teams").doc(currentTeamId).update({
+            members: firebase.firestore.FieldValue.arrayRemove(uid),
+            admins: firebase.firestore.FieldValue.arrayRemove(uid)
+        });
+        showMemberManagementModal(); // 画面を更新して再描画
+    } catch(e) {
+        alert("削除に失敗しました。");
+        console.error(e);
     }
 }
 
