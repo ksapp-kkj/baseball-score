@@ -14,15 +14,20 @@
             <h2>⚾️野球スコア管理ログイン</h2>
             <div class="card mt-20">
                 <div class="form-group">
-                    <input type="text" id="username-input" class="w-100 mb-10" placeholder="表示名（※新規登録時のみ入力）">
-                </div>
-                <div class="form-group">
                     <input type="email" id="email-input" class="w-100 mb-10" placeholder="メールアドレス">
                 </div>
                 <div class="form-group">
                     <input type="password" id="password-input" class="w-100 mb-15" placeholder="パスワード">
                 </div>
-                <button class="btn-add w-100 p-10" onclick="loginWithEmail()">ログイン / 新規登録</button>
+                
+                <div class="flex-gap-8 mt-15">
+                    <button class="btn-add flex-1 p-10" onclick="loginAccount()">ログイン</button>
+                    <button class="btn-small-action btn-small-orange flex-1 p-10" onclick="registerAccount()">新規登録</button>
+                </div>
+                
+                <div class="mt-15-center">
+                    <button onclick="resetPassword()" class="btn-reset-password">パスワードを忘れた場合</button>
+                </div>
             </div>
         </div>
     </div>
@@ -113,7 +118,7 @@
 
                 <div class="list-header">
                     <h3>選手一覧</h3>
-                    <button class="btn-add" onclick="showAddPlayerModal()">選手登録</button>
+                    <button class="btn-add admin-only" onclick="showAddPlayerModal()">選手登録</button>
                 </div>
                 
                 <div class="table-container">
@@ -136,8 +141,8 @@
                 <div class="list-header">
                     <h2>試合管理 <span class="help-trigger" onclick="showHelpModal('game')">📝</span></h2>
                     <div class="flex-gap-8">
-                        <button class="btn-small-edit" id="toggle-delete-btn" onclick="toggleDeleteMode()">編集</button>
-                        <button class="btn-add" onclick="showAddGameModal()">新規試合登録</button>
+                        <button class="btn-small-edit admin-only" id="toggle-delete-btn" onclick="toggleDeleteMode()">編集</button>
+                        <button class="btn-add admin-only" onclick="showAddGameModal()">新規試合登録</button>
                     </div>
                 </div>
                 
