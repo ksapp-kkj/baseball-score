@@ -56,7 +56,6 @@ auth.onAuthStateChanged(async (user) => {
     if (user) {
         currentUser = user;
         
-        // 🌟 表示名（ニックネーム）の取得と初期化
         const uDoc = await db.collection("users").doc(user.uid).get();
         if (uDoc.exists && uDoc.data().name) {
             document.getElementById('edit-username-input').value = uDoc.data().name;
@@ -75,10 +74,10 @@ auth.onAuthStateChanged(async (user) => {
     }
 });
 
-async function loginWithEmail() {
+// 🌟 修正：純粋な「ログイン」だけの処理
+async function loginAccount() {
     const email = document.getElementById('email-input').value;
     const password = document.getElementById('password-input').value;
-    const userName = document.getElementById('username-input').value || "名無しプレーヤー";
     
     if(!email || !password) return alert("メールアドレスとパスワードを入力してください");
     
@@ -86,19 +85,45 @@ async function loginWithEmail() {
         await auth.signInWithEmailAndPassword(email, password);
     } catch(error) {
         if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-login-credentials') {
-            if(confirm("アカウントが見つかりません。入力した内容で新規登録しますか？")) {
-                try {
-                    const userCred = await auth.createUserWithEmailAndPassword(email, password);
-                    // 新規登録時に名前を保存
-                    await db.collection("users").doc(userCred.user.uid).set({ email: email, name: userName }, { merge: true });
-                    alert("新規登録が完了しました！");
-                } catch(e) { 
-                    alert("登録エラー: " + e.message); 
-                }
-            }
+            alert("アカウントが見つからないか、パスワードが間違っています。\n初めての方は「新規登録」ボタンから登録してください。");
         } else {
-            alert("エラー: " + error.message);
+            alert("ログインエラー: " + error.message);
         }
+    }
+}
+
+// 🌟 修正：「新規登録」だけの処理（ここで名前を聞く）
+async function registerAccount() {
+    const email = document.getElementById('email-input').value;
+    const password = document.getElementById('password-input').value;
+    
+    if(!email || !password) return alert("登録するメールアドレスとパスワードを入力してください");
+    
+    let userName = prompt("チーム内で表示する「あなたの表示名（ニックネーム）」を入力してください。\n※後からマイページでも変更できます。", "");
+    if (userName === null) return; 
+    if (userName.trim() === "") userName = "名無しプレーヤー";
+
+    try {
+        const userCred = await auth.createUserWithEmailAndPassword(email, password);
+        await db.collection("users").doc(userCred.user.uid).set({ email: email, name: userName }, { merge: true });
+        alert("新規登録が完了しました！");
+    } catch(error) {
+        if (error.code === 'auth/email-already-in-use') {
+            alert("このメールアドレスは既に登録されています。「ログイン」ボタンをお試しください。");
+        } else {
+            alert("登録エラー: " + error.message);
+        }
+    }
+}
+
+async function resetPassword() {
+    const email = prompt("登録したメールアドレスを入力してください。\nパスワード再設定用のメールを送信します。");
+    if (!email) return;
+    try {
+        await auth.sendPasswordResetEmail(email);
+        alert("パスワード再設定メールを送信しました！\nメール内のリンクから新しいパスワードを設定してください。");
+    } catch (e) {
+        alert("エラーが発生しました。メールアドレスが正しいか確認してください。\n" + e.message);
     }
 }
 
@@ -109,11 +134,30 @@ function logout() {
 }
 
 async function deleteAccount() {
-    if (!confirm("⚠️本当にアカウントを削除しますか？\nこの操作は取り消せません。\n（※所属チームのデータ自体は消えませんが、あなたのログイン情報は完全に削除され、アプリに入れなくなります）")) return;
+    if (!confirm("⚠️本当にアカウントを完全に削除しますか？\nこの操作は取り消せません。\n（※チームの試合データ自体は消えませんが、あなたのユーザー情報は完全に削除されます）")) return;
 
     try {
+        const uid = currentUser.uid;
+
+        // ① 自分が所属しているチームから、自分を削除する
+        const teamsSnapshot = await db.collection("teams").where("members", "array-contains", uid).get();
+        const batch = db.batch(); // 複数の一括処理を行うための準備
+        teamsSnapshot.forEach(doc => {
+            batch.update(doc.ref, {
+                members: firebase.firestore.FieldValue.arrayRemove(uid),
+                admins: firebase.firestore.FieldValue.arrayRemove(uid)
+            });
+        });
+        await batch.commit(); // チーム情報の更新を実行
+
+        // ② データベース（usersコレクション）から自分の名前・メアドを削除
+        await db.collection("users").doc(uid).delete();
+
+        // ③ 最後に、認証システム（Authentication）からログインアカウントを削除
         await currentUser.delete();
-        alert("アカウントを削除しました。ご利用ありがとうございました。");
+        
+        alert("アカウントと関連データを完全に削除しました。ご利用ありがとうございました。");
+        // 削除成功後は自動的にログアウトされ、ログイン画面に戻ります
     } catch (error) {
         if (error.code === 'auth/requires-recent-login') {
             alert("🔒 セキュリティのため、アカウントを削除するには「一度ログアウトし、再度ログイン」し直してからすぐに実行してください。");
@@ -123,7 +167,6 @@ async function deleteAccount() {
     }
 }
 
-// 🌟 表示名の変更処理
 async function updateUserName() {
     const newName = document.getElementById('edit-username-input').value.trim();
     if (!newName) return alert("表示名を入力してください");
@@ -135,9 +178,6 @@ async function updateUserName() {
     }
 }
 
-/**
- * 🌟 権限管理（モラル対策）のブロック機能
- */
 function checkAdmin() {
     if (!currentTeamAdmins.includes(currentUser.uid)) {
         alert("【閲覧専用モード】\nデータの追加・編集・削除には「管理者権限」が必要です。\nチームの作成者（監督）に権限の付与を依頼してください。");
@@ -145,7 +185,6 @@ function checkAdmin() {
     }
     return true;
 }
-
 
 /**
  * 🌟 マイページ（チーム管理）機能
@@ -257,13 +296,18 @@ async function selectTeam(teamId, teamName) {
         
         currentTeamAdmins = data.admins || [];
         
+        const appScreen = document.getElementById('main-app-screen');
+        const modalOverlay = document.getElementById('modal-overlay');
         const manageBtn = document.getElementById('manage-members-btn');
-        if(manageBtn) {
-            if(currentTeamAdmins.includes(currentUser.uid)){
-                manageBtn.classList.remove('hidden');
-            } else {
-                manageBtn.classList.add('hidden');
-            }
+        
+        if(currentTeamAdmins.includes(currentUser.uid)){
+            appScreen.classList.remove('viewer-mode');
+            modalOverlay.classList.remove('viewer-mode');
+            if(manageBtn) manageBtn.classList.remove('hidden');
+        } else {
+            appScreen.classList.add('viewer-mode');
+            modalOverlay.classList.add('viewer-mode');
+            if(manageBtn) manageBtn.classList.add('hidden');
         }
 
         players = data.players || [];
@@ -295,7 +339,7 @@ function backToMyPage() {
 }
 
 /**
- * 🌟 メンバー・権限管理機能（表示名に対応）
+ * 🌟 メンバー・権限管理機能
  */
 async function showMemberManagementModal() {
     if (!currentTeamId) return;
@@ -312,11 +356,13 @@ async function showMemberManagementModal() {
         
         for (let uid of members) {
             let displayName = "不明なユーザー";
+            let email = "---";
             try {
                 const uDoc = await db.collection("users").doc(uid).get();
                 if(uDoc.exists) {
                     const d = uDoc.data();
                     displayName = d.name ? d.name : "名無しプレーヤー";
+                    email = d.email ? d.email : "---";
                 }
             } catch(e){}
 
@@ -338,6 +384,7 @@ async function showMemberManagementModal() {
                 <div class="member-list-item">
                     <div>
                         <div class="member-name-text">${displayName}</div>
+                        <div style="font-size:0.75rem; color:#999; margin-bottom:3px;">${email}</div>
                         ${isAdmin ? '<span class="admin-badge admin-badge-orange">管理者</span>' : '<span class="viewer-badge">閲覧のみ</span>'}
                     </div>
                     <div>${actionHtml}</div>
@@ -348,7 +395,7 @@ async function showMemberManagementModal() {
         document.getElementById('modal-title').innerText = "チームメンバーと権限の管理";
         document.getElementById('modal-body').innerHTML = `
             <div class="edit-form">
-                <p class="help-text mb-15">「管理者にする」を押すと、そのメンバーもスコア入力や選手編集ができるようになります。</p>
+                <p class="help-text mb-15">「管理者にする」を押すと、そのメンバーもスコア入力などができるようになります。メンバーがログインIDを忘れた場合は、上記のメールアドレスを教えてあげてください。</p>
                 <div class="member-scroll-container">
                     ${memberListHtml}
                 </div>
@@ -383,9 +430,6 @@ async function toggleAdmin(uid, makeAdmin) {
 }
 
 
-/**
- * 起動時の処理
- */
 window.onload = function() {
     setupNavigation();
     setupBackupUI();
@@ -419,9 +463,6 @@ window.onload = function() {
     });
 };
 
-/**
- * ナビゲーション制御
- */
 function setupNavigation() {
     const navItems = document.querySelectorAll('.nav-item');
     const sections = document.querySelectorAll('.content-section');
@@ -469,9 +510,6 @@ function convertToKatakana(str) {
     });
 }
 
-/**
- * 選手管理機能
- */
 function showAddPlayerModal() {
     document.getElementById('modal-title').innerText = "選手登録";
     const subPosHtml = positionOptions.map(pos => `
@@ -497,7 +535,7 @@ function showAddPlayerModal() {
             </select>
             <p class="sub-label">サブ守備:</p>
             <div class="checkbox-grid">${subPosHtml}</div>
-            <div class="modal-btns"><button class="btn-save" onclick="addPlayer()">登録する</button></div>
+            <div class="modal-btns"><button class="btn-save admin-only" onclick="addPlayer()">登録する</button></div>
         </div>
     `;
     document.getElementById('modal-overlay').style.display = 'flex';
@@ -561,8 +599,8 @@ function showPlayerDetail(id) {
             <p><strong>メイン守備:</strong> ${p.mainPos}</p>
             <p><strong>サブ守備:</strong> ${p.subPos.length > 0 ? p.subPos.join(', ') : "なし"}</p>
             <div class="modal-btns">
-                <button class="btn-edit-mode" onclick="showEditForm(${id})">編集する</button>
-                <button class="btn-delete" onclick="deletePlayer(${id})">削除する</button>
+                <button class="btn-edit-mode admin-only" onclick="showEditForm(${id})">編集する</button>
+                <button class="btn-delete admin-only" onclick="deletePlayer(${id})">削除する</button>
             </div>
         </div>
     `;
@@ -596,7 +634,7 @@ function showEditForm(id) {
             <select id="edit-main-pos">${positionOptions.map(pos => `<option value="${pos}" ${p.mainPos===pos?'selected':''}>${pos}</option>`).join('')}</select>
             <label>サブ守備:</label>
             <div class="checkbox-grid">${subCheckboxesHtml}</div>
-            <div class="modal-btns"><button class="btn-save" onclick="updatePlayer()">保存する</button></div>
+            <div class="modal-btns"><button class="btn-save admin-only" onclick="updatePlayer()">保存する</button></div>
         </div>
     `;
 }
@@ -667,9 +705,6 @@ function renderPlayerList() {
     `).join('');
 }
 
-/**
- * 試合管理機能
- */
 function toggleDeleteMode() {
     isGameDeleteMode = !isGameDeleteMode;
     const btn = document.getElementById('toggle-delete-btn');
@@ -718,12 +753,12 @@ function showAddGameModal(gameId = null) {
             
             <div class="flex-gap-8">
                 <select id="g-participant-select" class="flex-1"></select>
-                <button type="button" class="btn-small-action btn-small-gray" onclick="addParticipant()">追加</button>
+                <button type="button" class="btn-small-action btn-small-gray admin-only" onclick="addParticipant()">追加</button>
             </div>
             <div id="g-participants-list" class="participant-list-container"></div>
 
             <div class="modal-btns mt-20">
-                <button class="btn-save" onclick="processGame(${gameId})">${isEdit ? '変更を保存する' : '試合を作成する'}</button>
+                <button class="btn-save admin-only" onclick="processGame(${gameId})">${isEdit ? '変更を保存する' : '試合を作成する'}</button>
             </div>
         </div>
     `;
@@ -750,7 +785,7 @@ function renderParticipants() {
         listEl.innerHTML = tempParticipants.map(pid => {
             const p = players.find(pl => String(pl.id) === String(pid));
             if (!p) return '';
-            return `<span class="participant-badge">${p.name} <span class="participant-remove" onclick="removeParticipant('${pid}')">&times;</span></span>`;
+            return `<span class="participant-badge">${p.name} <span class="participant-remove admin-only" onclick="removeParticipant('${pid}')">&times;</span></span>`;
         }).join('');
     }
 }
@@ -822,7 +857,7 @@ function renderGameList() {
         const weatherIcon = g.weather === '晴れ' ? '☀️' : g.weather === '曇り' ? '☁️' : g.weather === '雨' ? '☔' : '❓';
         const pCount = g.participants ? g.participants.length : 0; 
         
-        const deleteBtnHtml = isGameDeleteMode ? `<button class="btn-delete-game mt-10 w-100" onclick="deleteGame(${g.id})">この試合を削除</button>` : '';
+        const deleteBtnHtml = isGameDeleteMode ? `<button class="btn-delete-game mt-10 w-100 admin-only" onclick="deleteGame(${g.id})">この試合を削除</button>` : '';
 
         return `
             <div class="game-card">
@@ -835,7 +870,7 @@ function renderGameList() {
                 
                 <div class="game-card-btns mt-15">
                     <button class="btn-small-action btn-small-blue flex-1 p-10" onclick="showLineupModal(${g.id})">スタメン・打順</button>
-                    <button class="btn-small-action btn-small-gray flex-1 p-10" onclick="showAddGameModal(${g.id})">試合情報の編集</button>
+                    <button class="btn-small-action btn-small-gray flex-1 p-10 admin-only" onclick="showAddGameModal(${g.id})">試合情報の編集</button>
                 </div>
                 ${deleteBtnHtml}
             </div>`;
@@ -865,9 +900,6 @@ function renderGameList() {
     }
 }
 
-/**
- * スタメン・打順登録機能
- */
 function showLineupModal(gameId) {
     if (players.length === 0) return alert("先に選手登録を行ってください。");
     currentGameForScore = games.find(game => game.id === gameId);
@@ -881,9 +913,9 @@ function showLineupModal(gameId) {
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
             <div id="lineup-wrapper"></div>
-            <button class="btn-small-action btn-small-green mt-10" onclick="addLineupRow()">＋ 打者を追加</button>
+            <button class="btn-small-action btn-small-green mt-10 admin-only" onclick="addLineupRow()">＋ 打者を追加</button>
             <div class="modal-btns">
-                <button class="btn-save" onclick="saveLineup()">スタメンを保存</button>
+                <button class="btn-save admin-only" onclick="saveLineup()">スタメンを保存</button>
             </div>
         </div>
     `;
@@ -922,7 +954,7 @@ function renderLineupRows() {
                 }).join('')}
             </select>
             
-            <button class="btn-remove-row" onclick="removeLineupRow(${index})">✖</button>
+            <button class="btn-remove-row admin-only" onclick="removeLineupRow(${index})">✖</button>
         `;
         wrapper.appendChild(row);
     });
@@ -956,9 +988,6 @@ function saveLineup() {
     closeModal();
 }
 
-/**
- * 投手成績入力機能
- */
 function showPitcherModal(gameId) {
     currentGameForScore = games.find(g => g.id === gameId);
     if (!currentGameForScore.pitchers) currentGameForScore.pitchers = [];
@@ -974,9 +1003,9 @@ function showPitcherModal(gameId) {
         <div class="edit-form">
             <p class="help-text mb-10">登板した投手の成績を入力してください。</p>
             <div id="pitcher-wrapper"></div>
-            <button class="btn-small-action btn-small-green mt-10" onclick="addPitcherRow()">＋ 投手を登録</button>
+            <button class="btn-small-action btn-small-green mt-10 admin-only" onclick="addPitcherRow()">＋ 投手を登録</button>
             <div class="modal-btns">
-                <button class="btn-save" onclick="savePitchers()">投手成績を保存</button>
+                <button class="btn-save admin-only" onclick="savePitchers()">投手成績を保存</button>
             </div>
         </div>
     `;
@@ -1002,7 +1031,7 @@ function renderPitcherRows() {
                         return `<option value="${p.id}" ${String(p.id) === String(item.playerId) ? 'selected' : ''}>[${p.number === "無" ? "無" : '#' + p.number}] ${p.name}</option>`;
                     }).join('')}
                 </select>
-                <button class="btn-remove-row" onclick="removePitcherRow(${index})">✖</button>
+                <button class="btn-remove-row admin-only" onclick="removePitcherRow(${index})">✖</button>
             </div>
             
             <div class="pitcher-grid">
@@ -1060,9 +1089,6 @@ function savePitchers() {
     closeModal();
 }
 
-/**
- * 打席成績入力機能
- */
 function showAtBatMatrixModal(gameId) {
     currentGameForScore = games.find(g => g.id === gameId);
     const g = currentGameForScore;
@@ -1130,10 +1156,10 @@ function renderAtBatMatrix() {
                 </table>
             </div>
 
-            <button class="btn-small-action btn-small-gray" onclick="addAtBatColumn()">＋ 右に打席列を追加</button>
+            <button class="btn-small-action btn-small-gray admin-only" onclick="addAtBatColumn()">＋ 右に打席列を追加</button>
 
             <div class="modal-btns mt-15">
-                <button class="btn-save" onclick="saveAndRefreshGames(); closeModal();">閉じる（自動保存済）</button>
+                <button class="btn-save" style="background:#999;" onclick="closeModal();">閉じる</button>
             </div>
         </div>
     `;
@@ -1146,6 +1172,11 @@ function addAtBatColumn() {
 }
 
 function openAtBatInput(lineIdx, atBatIdx) {
+    if (!currentTeamAdmins.includes(currentUser.uid)) {
+        alert("【閲覧専用モード】\nこの操作は管理者のみ可能です。");
+        return;
+    }
+
     const g = currentGameForScore;
     const item = g.lineup[lineIdx];
     const player = players.find(p => String(p.id) === String(item.playerId));
@@ -1233,24 +1264,28 @@ function clearAtBatInput(lineIdx, atBatIdx) {
     renderAtBatMatrix();
 }
 
-/**
- * イニングスコアボード機能
- */
 function showScoreInputModal(gameId) {
     currentGameForScore = games.find(game => game.id === gameId);
     if (!currentGameForScore.innings) currentGameForScore.innings = Array(9).fill().map(() => ({ us: "", them: "" }));
+
+    // 🌟 管理者かどうかを判定し、管理者でなければ「disabled（無効化）」の属性をつける
+    const isAdmin = currentTeamAdmins.includes(currentUser.uid);
+    const disabledAttr = isAdmin ? "" : "disabled";
+    const labelStyle = isAdmin ? "" : "pointer-events: none; opacity: 0.6;";
 
     document.getElementById('modal-title').innerText = "イニングスコア入力";
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
             <p class="modal-vs-title-lg">vs ${currentGameForScore.opponent}</p>
             <div id="score-board-wrapper"></div>
-            <button class="btn-small-action btn-small-gray mt-10" onclick="addInning()">＋ イニング追加</button>
-            <label class="checkbox-label-row">
-                <input type="checkbox" id="s-finished" class="chk-finished" ${currentGameForScore.isFinished ? 'checked' : ''}>
+            <button class="btn-small-action btn-small-gray mt-10 admin-only" onclick="addInning()">＋ イニング追加</button>
+            
+            <label class="checkbox-label-row" style="${labelStyle}">
+                <input type="checkbox" id="s-finished" class="chk-finished" ${currentGameForScore.isFinished ? 'checked' : ''} ${disabledAttr}>
                 この試合を終了とする（集計に反映）
             </label>
-            <div class="modal-btns mt-20"><button class="btn-save" onclick="saveScoreBoard()">スコアを保存する</button></div>
+            
+            <div class="modal-btns mt-20"><button class="btn-save admin-only" onclick="saveScoreBoard()">スコアを保存する</button></div>
         </div>
     `;
     renderScoreBoardTable();
@@ -1313,9 +1348,6 @@ function deleteGame(id) {
     }
 }
 
-/**
- * 🌟 データ管理（Firebaseへ保存）
- */
 async function saveAndRefreshPlayers() {
     renderPlayerList(); 
     if (currentTeamId) {
@@ -1339,9 +1371,6 @@ async function saveAndRefreshGames() {
     }
 }
 
-/**
- * データ移行（ローカルのバックアップをクラウドへ）
- */
 function setupBackupUI() {
     const teamPage = document.getElementById('team-page');
     if (!teamPage) return;
@@ -1352,8 +1381,8 @@ function setupBackupUI() {
         <h3>データ管理（クラウド連携済）</h3>
         <p class="help-text">データは自動的にクラウドに保存されています。過去にJSON形式で書き出したデータをこのチームに流し込む場合は「復元」を押してください。</p>
         <div class="flex-gap-8 mt-15">
-            <button class="btn-small-action btn-small-blue flex-1 p-10" onclick="exportData()">📥 今のデータを書き出す</button>
-            <label class="btn-import-label flex-1 p-10">
+            <button class="btn-small-action btn-small-blue flex-1 p-10 admin-only" onclick="exportData()">📥 今のデータを書き出す</button>
+            <label class="btn-import-label flex-1 p-10 admin-only">
                 📤 過去のデータを復元
                 <input type="file" accept=".json" class="hidden" onchange="importData(event)">
             </label>
@@ -1475,9 +1504,6 @@ function showHelpModal(pageId) {
     document.getElementById('modal-overlay').style.display = 'flex';
 }
 
-/**
- * チーム成績・個人成績の集計
- */
 function updateTeamRecord() {
     const el = document.getElementById('team-record');
     if(!el) return;
