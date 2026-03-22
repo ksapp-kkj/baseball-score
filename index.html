@@ -10,56 +10,68 @@
 <body>
 
     <div id="login-screen" class="app-screen active">
-        <div style="padding: 20px; text-align: center;">
+        <div class="login-wrapper">
             <h2>⚾️野球スコア管理ログイン</h2>
-            <div class="card" style="margin-top: 20px;">
+            <div class="card mt-20">
                 <div class="form-group">
-                    <input type="email" id="email-input" placeholder="メールアドレス" style="width: 100%; margin-bottom: 10px;">
+                    <input type="text" id="username-input" class="w-100 mb-10" placeholder="表示名（※新規登録時のみ入力）">
                 </div>
                 <div class="form-group">
-                    <input type="password" id="password-input" placeholder="パスワード" style="width: 100%; margin-bottom: 15px;">
+                    <input type="email" id="email-input" class="w-100 mb-10" placeholder="メールアドレス">
                 </div>
-                <button class="btn-add" onclick="loginWithEmail()" style="width: 100%; padding: 10px;">ログイン / 新規登録</button>
+                <div class="form-group">
+                    <input type="password" id="password-input" class="w-100 mb-15" placeholder="パスワード">
+                </div>
+                <button class="btn-add w-100 p-10" onclick="loginWithEmail()">ログイン / 新規登録</button>
             </div>
         </div>
     </div>
 
-    <div id="mypage-screen" class="app-screen" style="display: none;">
-        <div style="padding: 20px;">
+    <div id="mypage-screen" class="app-screen">
+        <div class="mypage-wrapper">
             <div class="list-header">
                 <h2>マイページ</h2>
                 <button class="btn-edit-mode" onclick="logout()">ログアウト</button>
             </div>
             
-            <h3 style="margin-top: 20px; margin-bottom: 10px;">所属チーム一覧</h3>
+            <h3 class="mt-20 mb-10">所属チーム一覧</h3>
             <div id="user-team-list" class="card">
                 <p class="empty-message">読み込み中...</p>
             </div>
 
-            <button class="btn-add" onclick="showCreateTeamModal()" style="width: 100%; margin-top: 20px; padding: 10px;">＋ 新しいチームを作成する</button>
+            <button class="btn-add w-100 mt-20 p-10" onclick="showCreateTeamModal()">＋ 新しいチームを作成する</button>
 
-            <hr style="margin: 30px 0; border: none; border-top: 1px dashed #ccc;">
-            <h3 style="margin-bottom: 10px;">既存のチームに参加する</h3>
-            <p style="font-size: 0.85rem; color: #666; margin-bottom: 10px;">監督から共有された「招待ID」を入力してください。</p>
-            <div style="display: flex; gap: 8px;">
-                <input type="text" id="join-team-id" placeholder="招待IDを入力" style="flex: 1; padding: 10px; font-size: 1rem; border: 1px solid #ddd; border-radius: 8px;">
-                <button class="btn-score" style="background:#1976d2; border:none; border-radius:8px; color:white; font-weight:bold; padding:0 20px;" onclick="joinTeam()">参加</button>
+            <hr class="dashed-hr">
+            <h3 class="mb-10">既存のチームに参加する</h3>
+            <p class="help-text mb-10">監督から共有された「招待ID」を入力してください。</p>
+            <div class="flex-gap-8">
+                <input type="text" id="join-team-id" class="input-box" placeholder="招待IDを入力">
+                <button class="btn-join" onclick="joinTeam()">参加</button>
             </div>
 
-            <div style="margin-top: 60px; text-align: center;">
-                <button onclick="deleteAccount()" style="background: none; border: none; color: #d32f2f; text-decoration: underline; cursor: pointer; font-size: 0.85rem;">アカウントを完全に削除する（退会）</button>
+            <div class="edit-name-wrapper">
+                <label class="edit-name-label">あなたの表示名（ニックネーム）:</label>
+                <div class="flex-gap-8 mt-5">
+                    <input type="text" id="edit-username-input" class="input-box" placeholder="表示名">
+                    <button class="btn-update-name" onclick="updateUserName()">変更</button>
+                </div>
+                <p class="help-text-small mt-5">※チームのメンバー管理画面には、ここで設定した名前が表示されます。</p>
+            </div>
+
+            <div class="delete-wrapper">
+                <button class="btn-delete-account" onclick="deleteAccount()">アカウントを完全に削除する（退会）</button>
             </div>
         </div>
     </div>
 
-    <div id="main-app-screen" class="app-screen" style="display: none;">
+    <div id="main-app-screen" class="app-screen">
         
-        <header style="display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; background: #2c3e50; color: white;">
+        <header class="app-header">
             <div>
-                <span id="current-team-display" style="font-weight: bold;">チーム名未定</span>
-                <div id="team-id-display" style="font-size: 0.75rem; color: #aaa; margin-top: 3px; cursor: pointer;" onclick="copyTeamId()">ID: --- (タップでコピー)</div>
+                <span id="current-team-display" class="header-team-name">チーム名未定</span>
+                <div id="team-id-display" class="header-team-id" onclick="copyTeamId()">ID: --- (タップでコピー)</div>
             </div>
-            <button class="btn-edit-mode" onclick="backToMyPage()" style="padding: 5px 10px; font-size: 0.8rem;">マイページへ戻る</button>
+            <button class="btn-back-mypage" onclick="backToMyPage()">マイページへ戻る</button>
         </header>
 
         <nav id="main-nav">
@@ -77,7 +89,7 @@
             <section id="team-page" class="content-section active">
                 <h2>チーム情報 <span class="help-trigger" onclick="showHelpModal('team')">📝</span></h2>
                 
-                <button id="manage-members-btn" class="btn-edit-mode" style="width: 100%; margin-bottom: 20px; display: none; background: #e65100;" onclick="showMemberManagementModal()">👥 チームメンバーと権限の管理</button>
+                <button id="manage-members-btn" class="btn-manage-members hidden" onclick="showMemberManagementModal()">👥 チームメンバーと権限の管理</button>
 
                 <div class="card">
                     <h3>基本情報</h3>
@@ -123,8 +135,8 @@
             <section id="game-page" class="content-section">
                 <div class="list-header">
                     <h2>試合管理 <span class="help-trigger" onclick="showHelpModal('game')">📝</span></h2>
-                    <div style="display:flex; gap:8px;">
-                        <button class="btn-edit-mode" id="toggle-delete-btn" style="padding:8px 12px; font-size:0.85rem;" onclick="toggleDeleteMode()">編集</button>
+                    <div class="flex-gap-8">
+                        <button class="btn-small-edit" id="toggle-delete-btn" onclick="toggleDeleteMode()">編集</button>
                         <button class="btn-add" onclick="showAddGameModal()">新規試合登録</button>
                     </div>
                 </div>
