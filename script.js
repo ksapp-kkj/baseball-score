@@ -18,7 +18,8 @@ const auth = firebase.auth();
  * 🌟 アプリ全体の状態管理
  */
 let currentUser = null;       
-let currentTeamId = null;     
+let currentTeamId = null;
+let currentTeamAdmins = []; // 🌟 現在のチームの管理者リストを保持
 
 const positionOptions = ["P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH"];
 const lineupPositionOptions = ["P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH", "EH", "ベンチ"];
@@ -51,16 +52,19 @@ function showScreen(screenId) {
 }
 
 /**
- * 🌟 Firebase 認証（ログイン・ログアウト）
+ * 🌟 Firebase 認証（ログイン・ログアウト・アカウント削除）
  */
-auth.onAuthStateChanged((user) => {
+auth.onAuthStateChanged(async (user) => {
     if (user) {
         currentUser = user;
+        // 🌟 権限管理で誰か判別できるよう、ユーザーのメアドをデータベースに保存
+        await db.collection("users").doc(user.uid).set({ email: user.email }, { merge: true });
         showScreen('mypage-screen');
         loadUserTeams(); 
     } else {
         currentUser = null;
         currentTeamId = null;
+        currentTeamAdmins = [];
         showScreen('login-screen');
     }
 });
@@ -94,6 +98,37 @@ function logout() {
         auth.signOut();
     }
 }
+
+// 🌟 今回追加：アカウント削除機能
+async function deleteAccount() {
+    if (!confirm("⚠️本当にアカウントを削除しますか？\nこの操作は取り消せません。\n（※所属チームのデータ自体は消えませんが、あなたのログイン情報は完全に削除され、アプリに入れなくなります）")) return;
+
+    try {
+        await currentUser.delete();
+        alert("アカウントを削除しました。ご利用ありがとうございました。");
+        // ※削除成功すると onAuthStateChanged が発動し、自動でログイン画面に戻ります
+    } catch (error) {
+        if (error.code === 'auth/requires-recent-login') {
+            alert("🔒 セキュリティのため、アカウントを削除するには「一度ログアウトし、再度ログイン」し直してからすぐに実行してください。");
+        } else {
+            alert("エラーが発生しました: " + error.message);
+        }
+    }
+}
+
+
+/**
+ * 🌟 権限管理（モラル対策）のブロック機能
+ */
+// 編集や保存をする前に、この関数で「管理者かどうか」をチェックします
+function checkAdmin() {
+    if (!currentTeamAdmins.includes(currentUser.uid)) {
+        alert("【閲覧専用モード】\nデータの追加・編集・削除には「管理者権限」が必要です。\nチームの作成者（監督）に権限の付与を依頼してください。");
+        return false;
+    }
+    return true;
+}
+
 
 /**
  * 🌟 マイページ（チーム管理）機能
@@ -159,7 +194,6 @@ async function createNewTeam() {
     }
 }
 
-// 🌟 今回の追加機能1：招待IDでチームに参加する
 async function joinTeam() {
     const teamIdInput = document.getElementById('join-team-id');
     const teamId = teamIdInput.value.trim();
@@ -173,7 +207,6 @@ async function joinTeam() {
             return alert("入力されたIDのチームが見つかりません。IDが間違っていないか確認してください。");
         }
 
-        // 魔法のコード「arrayUnion」を使って、名簿（members）に自分を安全に追加する
         await docRef.update({
             members: firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
         });
@@ -187,7 +220,6 @@ async function joinTeam() {
     }
 }
 
-// 🌟 今回の追加機能2：招待IDをクリップボードにコピーする
 function copyTeamId() {
     if (!currentTeamId) return;
     navigator.clipboard.writeText(currentTeamId).then(() => {
@@ -200,14 +232,21 @@ function copyTeamId() {
 async function selectTeam(teamId, teamName) {
     currentTeamId = teamId;
     document.getElementById('current-team-display').innerText = teamName;
-    
-    // 🌟 ヘッダーにIDを表示させる
     document.getElementById('team-id-display').innerText = `ID: ${teamId} (タップでコピー)`;
     
     try {
         const doc = await db.collection("teams").doc(teamId).get();
         const data = doc.data();
         
+        // 🌟 チームの管理者リストを変数に記憶する
+        currentTeamAdmins = data.admins || [];
+        
+        // 🌟 自分が管理者なら「メンバー管理ボタン」を表示する
+        const manageBtn = document.getElementById('manage-members-btn');
+        if(manageBtn) {
+            manageBtn.style.display = currentTeamAdmins.includes(currentUser.uid) ? 'block' : 'none';
+        }
+
         players = data.players || [];
         games = data.games || [];
         
@@ -229,10 +268,100 @@ async function selectTeam(teamId, teamName) {
 
 function backToMyPage() {
     currentTeamId = null;
+    currentTeamAdmins = [];
     players = [];
     games = [];
     showScreen('mypage-screen');
     loadUserTeams();
+}
+
+/**
+ * 🌟 今回追加：メンバー・権限管理モーダルの表示と操作
+ */
+async function showMemberManagementModal() {
+    if (!currentTeamId) return;
+    document.getElementById('modal-title').innerText = "メンバー情報取得中...";
+    document.getElementById('modal-overlay').style.display = 'flex';
+
+    try {
+        // 最新のチーム情報を取得
+        const doc = await db.collection("teams").doc(currentTeamId).get();
+        const teamData = doc.data();
+        const members = teamData.members || [];
+        const admins = teamData.admins || [];
+
+        let memberListHtml = '';
+        
+        // メンバー全員のメールアドレスを users コレクションから取得
+        for (let uid of members) {
+            let email = "不明なユーザー";
+            try {
+                const uDoc = await db.collection("users").doc(uid).get();
+                if(uDoc.exists) email = uDoc.data().email;
+            } catch(e){}
+
+            const isAdmin = admins.includes(uid);
+            const isMe = uid === currentUser.uid;
+
+            let actionHtml = '';
+            if (isAdmin) {
+                if (admins.length === 1 && isMe) {
+                    actionHtml = `<span style="color:#999; font-size:0.8rem;">※最後の管理者です</span>`;
+                } else {
+                    actionHtml = `<button class="btn-delete" style="padding:4px 8px; font-size:0.8rem;" onclick="toggleAdmin('${uid}', false)">管理者を外す</button>`;
+                }
+            } else {
+                actionHtml = `<button class="btn-edit-mode" style="padding:4px 8px; font-size:0.8rem; background:#1976d2;" onclick="toggleAdmin('${uid}', true)">管理者にする</button>`;
+            }
+
+            memberListHtml += `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:12px; border-bottom:1px solid #eee;">
+                    <div>
+                        <div style="font-size:0.95rem; font-weight:bold;">${email}</div>
+                        ${isAdmin ? '<span class="admin-badge" style="margin-left:0; background:#e65100;">管理者</span>' : '<span style="font-size:0.75rem; color:#666;">閲覧のみ</span>'}
+                    </div>
+                    <div>${actionHtml}</div>
+                </div>
+            `;
+        }
+
+        document.getElementById('modal-title').innerText = "チームメンバーと権限の管理";
+        document.getElementById('modal-body').innerHTML = `
+            <div class="edit-form">
+                <p style="font-size:0.85rem; color:#666; margin-bottom:15px;">「管理者にする」を押すと、そのメンバーもスコア入力や選手編集ができるようになります。</p>
+                <div style="max-height: 40vh; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 15px;">
+                    ${memberListHtml}
+                </div>
+                <div class="modal-btns">
+                    <button class="btn-save" onclick="closeModal()">閉じる</button>
+                </div>
+            </div>
+        `;
+    } catch(e) {
+        alert("メンバー情報の取得に失敗しました。");
+        closeModal();
+    }
+}
+
+// 権限の付与・剥奪処理
+async function toggleAdmin(uid, makeAdmin) {
+    if(!confirm(makeAdmin ? "このメンバーを管理者にしますか？" : "このメンバーから管理者権限を外しますか？（閲覧のみになります）")) return;
+    
+    try {
+        if (makeAdmin) {
+            await db.collection("teams").doc(currentTeamId).update({
+                admins: firebase.firestore.FieldValue.arrayUnion(uid)
+            });
+        } else {
+            await db.collection("teams").doc(currentTeamId).update({
+                admins: firebase.firestore.FieldValue.arrayRemove(uid)
+            });
+        }
+        // 画面を再描画
+        showMemberManagementModal();
+    } catch(e) {
+        alert("権限の変更に失敗しました。");
+    }
 }
 
 
@@ -253,6 +382,12 @@ window.onload = function() {
         const el = document.getElementById(field.id);
         if (el) {
             el.addEventListener('change', async (e) => {
+                if (!checkAdmin()) {
+                    // 権限がなければ変更を取り消す
+                    e.target.value = e.target.defaultValue;
+                    return; 
+                }
+                
                 if (currentTeamId) {
                     await db.collection("teams").doc(currentTeamId).update({
                         [field.key]: e.target.value
@@ -260,6 +395,7 @@ window.onload = function() {
                     if(field.key === 'team_name') {
                         document.getElementById('current-team-display').innerText = e.target.value;
                     }
+                    e.target.defaultValue = e.target.value;
                 }
             });
         }
@@ -351,6 +487,8 @@ function showAddPlayerModal() {
 }
 
 function addPlayer() {
+    if (!checkAdmin()) return; // 🌟 権限チェック
+
     const name = document.getElementById('p-name').value;
     const furigana = document.getElementById('p-furigana').value; 
     const mainPos = document.getElementById('p-main-pos').value;
@@ -447,6 +585,8 @@ function showEditForm(id) {
 }
 
 function updatePlayer() {
+    if (!checkAdmin()) return; // 🌟 権限チェック
+
     const p = players.find(player => player.id === currentEditingPlayerId);
     if (!p) return;
 
@@ -486,6 +626,8 @@ function updatePlayer() {
 }
 
 function deletePlayer(id) {
+    if (!checkAdmin()) return; // 🌟 権限チェック
+
     if(confirm("この選手を削除しますか？")) {
         players = players.filter(p => p.id !== id);
         saveAndRefreshPlayers();
@@ -611,6 +753,8 @@ function removeParticipant(pid) {
 }
 
 function processGame(gameId) {
+    if (!checkAdmin()) return; // 🌟 権限チェック
+
     const date = document.getElementById('g-date').value;
     const opponent = document.getElementById('g-opponent').value;
     if(!date || !opponent) return alert("日付と相手名は必須です");
@@ -785,6 +929,8 @@ function removeLineupRow(index) {
 }
 
 function saveLineup() {
+    if (!checkAdmin()) return; // 🌟 権限チェック
+
     const filteredLineup = tempLineup.filter(item => item.playerId !== "");
     filteredLineup.forEach(item => { if (!item.results) item.results = []; });
     
@@ -889,6 +1035,8 @@ function removePitcherRow(index) {
 }
 
 function savePitchers() {
+    if (!checkAdmin()) return; // 🌟 権限チェック
+
     const filtered = tempPitchers.filter(item => item.playerId !== "");
     currentGameForScore.pitchers = filtered;
     saveAndRefreshGames();
@@ -1023,6 +1171,8 @@ function openAtBatInput(lineIdx, atBatIdx) {
 }
 
 function saveAndNextAtBat(lineIdx, atBatIdx) {
+    if (!checkAdmin()) return; // 🌟 権限チェック
+
     const res = document.getElementById('ab-result').value;
     const rbi = document.getElementById('ab-rbi').value;
     const steal = document.getElementById('ab-steal').value; 
@@ -1047,6 +1197,8 @@ function saveAndNextAtBat(lineIdx, atBatIdx) {
 }
 
 function saveAtBatInput(lineIdx, atBatIdx) {
+    if (!checkAdmin()) return; // 🌟 権限チェック
+
     const res = document.getElementById('ab-result').value;
     const rbi = document.getElementById('ab-rbi').value;
     const steal = document.getElementById('ab-steal').value; 
@@ -1057,6 +1209,8 @@ function saveAtBatInput(lineIdx, atBatIdx) {
 }
 
 function clearAtBatInput(lineIdx, atBatIdx) {
+    if (!checkAdmin()) return; // 🌟 権限チェック
+
     currentGameForScore.lineup[lineIdx].results[atBatIdx] = { result: "", rbi: 0, steal: 0 };
     saveAndRefreshGames();
     renderAtBatMatrix();
@@ -1121,6 +1275,8 @@ function addInning() {
 }
 
 function saveScoreBoard() {
+    if (!checkAdmin()) return; // 🌟 権限チェック
+
     const g = currentGameForScore;
     g.score.us = g.innings.reduce((sum, inn) => sum + (parseInt(inn.us) || 0), 0);
     g.score.them = g.innings.reduce((sum, inn) => sum + (parseInt(inn.them) || 0), 0);
@@ -1131,6 +1287,8 @@ function saveScoreBoard() {
 }
 
 function deleteGame(id) {
+    if (!checkAdmin()) return; // 🌟 権限チェック
+
     if(confirm("試合情報を削除しますか？")) {
         games = games.filter(g => g.id !== id);
         saveAndRefreshGames();
@@ -1209,6 +1367,11 @@ function exportData() {
 }
 
 function importData(event) {
+    if (!checkAdmin()) {
+        event.target.value = '';
+        return; 
+    }
+
     const file = event.target.files[0];
     if (!file) return;
     
