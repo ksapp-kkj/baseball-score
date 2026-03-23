@@ -662,10 +662,47 @@ th {
 .edit-name-wrapper { margin-top: 30px; padding-top: 20px; border-top: 1px dashed #ccc; text-align: left; }
 .edit-name-label { font-size: 0.85rem; font-weight: bold; color: var(--grass-green); }
 
-.app-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; background: #2c3e50; color: white; }
-.header-team-name { font-weight: bold; }
-.header-team-id { font-size: 0.75rem; color: #aaa; margin-top: 3px; cursor: pointer; }
-.btn-back-mypage { padding: 5px 10px; font-size: 0.8rem; background: var(--edit-color); color: white; border: none; border-radius: 6px; cursor: pointer; }
+/* 🌟 ヘッダー関連のスタイルを修正 */
+.app-header { 
+    display: flex; 
+    flex-direction: column; /* 横並びから縦並びに変更 */
+    justify-content: center; 
+    align-items: center;    /* 左右の中央揃え */
+    gap: 12px;              /* 各要素の間の余白 */
+    padding: 15px 20px; 
+    background: #2c3e50; 
+    color: white; 
+    text-align: center;
+}
+.header-team-name { 
+    font-weight: bold; 
+    font-size: 1.4rem;      /* 文字を少し大きく */
+    letter-spacing: 1px;
+}
+.header-team-id { 
+    font-size: 0.95rem; 
+    color: #fff; 
+    cursor: pointer; 
+    background: rgba(255, 255, 255, 0.15); /* コピーできる枠として分かりやすく装飾 */
+    padding: 8px 20px;
+    border-radius: 8px;
+    line-height: 1.4;
+}
+.copy-text {
+    font-size: 0.75rem;
+    color: #aaa;
+}
+.btn-back-mypage { 
+    padding: 8px 24px; 
+    font-size: 0.9rem; 
+    background: var(--edit-color); 
+    color: white; 
+    border: none; 
+    border-radius: 20px;    /* 丸みを持たせて押しやすく */
+    cursor: pointer; 
+    font-weight: bold;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
 
 /* 🌟 ボタン中央配置の修正 */
 .btn-manage-members { 
