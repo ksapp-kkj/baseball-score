@@ -60,8 +60,8 @@ auth.onAuthStateChanged(async (user) => {
         if (uDoc.exists && uDoc.data().name) {
             document.getElementById('edit-username-input').value = uDoc.data().name;
         } else {
-            await db.collection("users").doc(user.uid).set({ email: user.email, name: "名無しプレーヤー" }, { merge: true });
-            document.getElementById('edit-username-input').value = "名無しプレーヤー";
+            // 🌟 修正：勝手に名前を入れず、空欄（プレースホルダー表示）にする
+            document.getElementById('edit-username-input').value = "";
         }
         
         showScreen('mypage-screen');
@@ -74,7 +74,7 @@ auth.onAuthStateChanged(async (user) => {
     }
 });
 
-// 🌟 修正：純粋な「ログイン」だけの処理
+// 🌟 純粋な「ログイン」だけの処理
 async function loginAccount() {
     const email = document.getElementById('email-input').value;
     const password = document.getElementById('password-input').value;
@@ -92,7 +92,7 @@ async function loginAccount() {
     }
 }
 
-// 🌟 修正：「新規登録」だけの処理（ここで名前を聞く）
+// 🌟 「新規登録」だけの処理（ここで名前を聞く）
 async function registerAccount() {
     const email = document.getElementById('email-input').value;
     const password = document.getElementById('password-input').value;
@@ -101,7 +101,8 @@ async function registerAccount() {
     
     let userName = prompt("チーム内で表示する「あなたの表示名（ニックネーム）」を入力してください。\n※後からマイページでも変更できます。", "");
     if (userName === null) return; 
-    if (userName.trim() === "") userName = "名無しプレーヤー";
+    // 🌟 何も入力されなかった場合は空文字にする
+    userName = userName.trim();
 
     try {
         const userCred = await auth.createUserWithEmailAndPassword(email, password);
@@ -139,25 +140,20 @@ async function deleteAccount() {
     try {
         const uid = currentUser.uid;
 
-        // ① 自分が所属しているチームから、自分を削除する
         const teamsSnapshot = await db.collection("teams").where("members", "array-contains", uid).get();
-        const batch = db.batch(); // 複数の一括処理を行うための準備
+        const batch = db.batch(); 
         teamsSnapshot.forEach(doc => {
             batch.update(doc.ref, {
                 members: firebase.firestore.FieldValue.arrayRemove(uid),
                 admins: firebase.firestore.FieldValue.arrayRemove(uid)
             });
         });
-        await batch.commit(); // チーム情報の更新を実行
+        await batch.commit(); 
 
-        // ② データベース（usersコレクション）から自分の名前・メアドを削除
         await db.collection("users").doc(uid).delete();
-
-        // ③ 最後に、認証システム（Authentication）からログインアカウントを削除
         await currentUser.delete();
         
         alert("アカウントと関連データを完全に削除しました。ご利用ありがとうございました。");
-        // 削除成功後は自動的にログアウトされ、ログイン画面に戻ります
     } catch (error) {
         if (error.code === 'auth/requires-recent-login') {
             alert("🔒 セキュリティのため、アカウントを削除するには「一度ログアウトし、再度ログイン」し直してからすぐに実行してください。");
@@ -355,19 +351,23 @@ async function showMemberManagementModal() {
         let memberListHtml = '';
         
         for (let uid of members) {
-            let displayName = "不明なユーザー";
+            let displayName = "未設定"; 
             let email = "---";
             try {
                 const uDoc = await db.collection("users").doc(uid).get();
                 if(uDoc.exists) {
                     const d = uDoc.data();
-                    displayName = d.name ? d.name : "名無しプレーヤー";
+                    // 🌟 名前が空の場合は「未設定」と表示
+                    displayName = (d.name && d.name !== "") ? d.name : "未設定";
                     email = d.email ? d.email : "---";
                 }
             } catch(e){}
 
             const isAdmin = admins.includes(uid);
             const isMe = uid === currentUser.uid;
+            
+            // 🌟 未設定の場合は文字を薄くするクラスを追加
+            const nameClass = displayName === "未設定" ? "text-unregistered" : "";
 
             let actionHtml = '';
             let removeHtml = '';
@@ -377,23 +377,23 @@ async function showMemberManagementModal() {
                     actionHtml = `<span class="admin-note">※最後の管理者です</span>`;
                 } else {
                     actionHtml = `<button class="btn-small-action btn-small-gray" onclick="toggleAdmin('${uid}', false)">管理者を外す</button>`;
-                    removeHtml = `<button class="btn-small-action" style="background:var(--danger-color);" onclick="removeMemberFromTeam('${uid}')">削除</button>`;
+                    removeHtml = `<button class="btn-small-action bg-danger" onclick="removeMemberFromTeam('${uid}')">削除</button>`;
                 }
             } else {
                 actionHtml = `<button class="btn-small-action btn-small-blue" onclick="toggleAdmin('${uid}', true)">管理者にする</button>`;
-                removeHtml = `<button class="btn-small-action" style="background:var(--danger-color);" onclick="removeMemberFromTeam('${uid}')">削除</button>`;
+                removeHtml = `<button class="btn-small-action bg-danger" onclick="removeMemberFromTeam('${uid}')">削除</button>`;
             }
 
-            // 自分自身は「削除」ボタンを出さない（退会機能を使ってもらうため）
             if (isMe) {
                 removeHtml = '';
             }
 
+            // 🌟 インラインスタイルを排除し、すべてCSSクラスで表現
             memberListHtml += `
                 <div class="member-list-item">
                     <div>
-                        <div class="member-name-text">${displayName}</div>
-                        <div style="font-size:0.75rem; color:#999; margin-bottom:3px;">${email}</div>
+                        <div class="member-name-text ${nameClass}">${displayName}</div>
+                        <div class="member-email-text">${email}</div>
                         ${isAdmin ? '<span class="admin-badge admin-badge-orange">管理者</span>' : '<span class="viewer-badge">閲覧のみ</span>'}
                     </div>
                     <div class="flex-gap-8">
@@ -407,7 +407,7 @@ async function showMemberManagementModal() {
         document.getElementById('modal-title').innerText = "チームメンバーと権限の管理";
         document.getElementById('modal-body').innerHTML = `
             <div class="edit-form">
-                <p class="help-text mb-15">不要なアカウントや幽霊データは「削除」ボタンでチームから外すことができます。</p>
+                <p class="help-text mb-15">不要なアカウント等を「削除」ボタンでチームから外すことができます。</p>
                 <div class="member-scroll-container">
                     ${memberListHtml}
                 </div>
@@ -441,7 +441,6 @@ async function toggleAdmin(uid, makeAdmin) {
     }
 }
 
-// 🌟 新規追加：メンバーをチームから外す機能
 async function removeMemberFromTeam(uid) {
     if(!confirm("このユーザーをチームから削除（追放）しますか？")) return;
     
@@ -450,13 +449,12 @@ async function removeMemberFromTeam(uid) {
             members: firebase.firestore.FieldValue.arrayRemove(uid),
             admins: firebase.firestore.FieldValue.arrayRemove(uid)
         });
-        showMemberManagementModal(); // 画面を更新して再描画
+        showMemberManagementModal(); 
     } catch(e) {
         alert("削除に失敗しました。");
         console.error(e);
     }
 }
-
 
 window.onload = function() {
     setupNavigation();
@@ -1237,10 +1235,10 @@ function openAtBatInput(lineIdx, atBatIdx) {
             </div>
 
             <div class="modal-btns mt-20">
-                <button class="btn-save-blue btn-save" style="background:#1976d2;" onclick="saveAndNextAtBat(${lineIdx}, ${atBatIdx})">決定して次の打者へ ➡</button>
-                <button class="btn-save-green btn-save" style="background:#4caf50;" onclick="saveAtBatInput(${lineIdx}, ${atBatIdx})">決定して表に戻る</button>
-                <button class="btn-delete" onclick="clearAtBatInput(${lineIdx}, ${atBatIdx})">この打席を空欄にする</button>
-                <button class="btn-edit-mode" style="background:#999;" onclick="renderAtBatMatrix()">キャンセル</button>
+                <button class="btn-save-blue btn-save bg-blue" onclick="saveAndNextAtBat(${lineIdx}, ${atBatIdx})">決定して次の打者へ ➡</button>
+                <button class="btn-save-green btn-save bg-green" onclick="saveAtBatInput(${lineIdx}, ${atBatIdx})">決定して表に戻る</button>
+                <button class="btn-delete bg-danger" onclick="clearAtBatInput(${lineIdx}, ${atBatIdx})">この打席を空欄にする</button>
+                <button class="btn-edit-mode bg-gray" onclick="renderAtBatMatrix()">キャンセル</button>
             </div>
         </div>
     `;
@@ -1296,10 +1294,10 @@ function showScoreInputModal(gameId) {
     currentGameForScore = games.find(game => game.id === gameId);
     if (!currentGameForScore.innings) currentGameForScore.innings = Array(9).fill().map(() => ({ us: "", them: "" }));
 
-    // 🌟 管理者かどうかを判定し、管理者でなければ「disabled（無効化）」の属性をつける
+    // 🌟 管理者以外は無効化する属性とクラスを適用
     const isAdmin = currentTeamAdmins.includes(currentUser.uid);
     const disabledAttr = isAdmin ? "" : "disabled";
-    const labelStyle = isAdmin ? "" : "pointer-events: none; opacity: 0.6;";
+    const labelClass = isAdmin ? "" : "disabled-label";
 
     document.getElementById('modal-title').innerText = "イニングスコア入力";
     document.getElementById('modal-body').innerHTML = `
@@ -1307,12 +1305,10 @@ function showScoreInputModal(gameId) {
             <p class="modal-vs-title-lg">vs ${currentGameForScore.opponent}</p>
             <div id="score-board-wrapper"></div>
             <button class="btn-small-action btn-small-gray mt-10 admin-only" onclick="addInning()">＋ イニング追加</button>
-            
-            <label class="checkbox-label-row" style="${labelStyle}">
+            <label class="checkbox-label-row ${labelClass}">
                 <input type="checkbox" id="s-finished" class="chk-finished" ${currentGameForScore.isFinished ? 'checked' : ''} ${disabledAttr}>
                 この試合を終了とする（集計に反映）
             </label>
-            
             <div class="modal-btns mt-20"><button class="btn-save admin-only" onclick="saveScoreBoard()">スコアを保存する</button></div>
         </div>
     `;
