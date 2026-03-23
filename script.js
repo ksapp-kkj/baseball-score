@@ -284,7 +284,8 @@ function copyTeamId() {
 async function selectTeam(teamId, teamName) {
     currentTeamId = teamId;
     document.getElementById('current-team-display').innerText = teamName;
-    document.getElementById('team-id-display').innerText = `ID: ${teamId} (タップでコピー)`;
+    // 🌟 修正：innerText から innerHTML に変え、改行タグ（<br>）を含める
+    document.getElementById('team-id-display').innerHTML = `ID: ${teamId}<br><span class="copy-text">(タップでコピー)</span>`;
     
     try {
         const doc = await db.collection("teams").doc(teamId).get();
@@ -1182,7 +1183,10 @@ function renderAtBatMatrix() {
                 </table>
             </div>
 
-            <button class="btn-small-action btn-small-gray admin-only" onclick="addAtBatColumn()">＋ 右に打席列を追加</button>
+            <div class="flex-gap-8 mt-10 admin-only">
+                <button class="btn-small-action btn-small-gray flex-1" onclick="addAtBatColumn()">＋ 列を追加</button>
+                <button class="btn-small-action bg-danger flex-1" onclick="removeAtBatColumn()">ー 列を削除</button>
+            </div>
 
             <div class="modal-btns mt-15">
                 <button class="btn-save" style="background:#999;" onclick="closeModal();">閉じる</button>
@@ -1190,6 +1194,16 @@ function renderAtBatMatrix() {
         </div>
     `;
     document.getElementById('modal-overlay').style.display = 'flex';
+}
+
+// 🌟 新規追加：打席列を削除する関数
+function removeAtBatColumn() {
+    if (currentAtBatColumns > 1) {
+        currentAtBatColumns--; // 列の表示数を減らす
+        renderAtBatMatrix();
+    } else {
+        alert("これ以上打席列を削除できません。");
+    }
 }
 
 function addAtBatColumn() {
@@ -1292,9 +1306,10 @@ function clearAtBatInput(lineIdx, atBatIdx) {
 
 function showScoreInputModal(gameId) {
     currentGameForScore = games.find(game => game.id === gameId);
+    
+    // 🌟 修正：初期状態を "0" から ""（未入力の空欄）に戻しました
     if (!currentGameForScore.innings) currentGameForScore.innings = Array(9).fill().map(() => ({ us: "", them: "" }));
 
-    // 🌟 管理者以外は無効化する属性とクラスを適用
     const isAdmin = currentTeamAdmins.includes(currentUser.uid);
     const disabledAttr = isAdmin ? "" : "disabled";
     const labelClass = isAdmin ? "" : "disabled-label";
@@ -1304,7 +1319,12 @@ function showScoreInputModal(gameId) {
         <div class="edit-form">
             <p class="modal-vs-title-lg">vs ${currentGameForScore.opponent}</p>
             <div id="score-board-wrapper"></div>
-            <button class="btn-small-action btn-small-gray mt-10 admin-only" onclick="addInning()">＋ イニング追加</button>
+            
+            <div class="flex-gap-8 mt-10 admin-only">
+                <button class="btn-small-action btn-small-gray flex-1" onclick="addInning()">＋ イニング追加</button>
+                <button class="btn-small-action bg-danger flex-1" onclick="removeInning()">ー イニング削除</button>
+            </div>
+
             <label class="checkbox-label-row ${labelClass}">
                 <input type="checkbox" id="s-finished" class="chk-finished" ${currentGameForScore.isFinished ? 'checked' : ''} ${disabledAttr}>
                 この試合を終了とする（集計に反映）
@@ -1316,11 +1336,23 @@ function showScoreInputModal(gameId) {
     document.getElementById('modal-overlay').style.display = 'flex';
 }
 
+function removeInning() {
+    if (currentGameForScore.innings.length > 1) {
+        currentGameForScore.innings.pop(); 
+        renderScoreBoardTable();
+    } else {
+        alert("これ以上イニングを削除できません。");
+    }
+}
+
 function renderScoreBoardTable() {
     const g = currentGameForScore;
     const headerHtml = g.innings.map((_, i) => `<th>${i + 1}</th>`).join('');
-    const usHtml = g.innings.map((inning, i) => `<td><input type="number" class="score-input" value="${inning.us}" oninput="updateInningScore(${i}, 'us', this.value)"></td>`).join('');
-    const themHtml = g.innings.map((inning, i) => `<td><input type="number" class="score-input" value="${inning.them}" oninput="updateInningScore(${i}, 'them', this.value)"></td>`).join('');
+    
+    // ※マイナス入力防止の min="0" はそのまま残しています
+    const usHtml = g.innings.map((inning, i) => `<td><input type="number" min="0" class="score-input" value="${inning.us}" oninput="updateInningScore(${i}, 'us', this.value)"></td>`).join('');
+    const themHtml = g.innings.map((inning, i) => `<td><input type="number" min="0" class="score-input" value="${inning.them}" oninput="updateInningScore(${i}, 'them', this.value)"></td>`).join('');
+    
     let totalUs = g.innings.reduce((sum, inn) => sum + (parseInt(inn.us) || 0), 0);
     let totalThem = g.innings.reduce((sum, inn) => sum + (parseInt(inn.them) || 0), 0);
 
@@ -1338,6 +1370,14 @@ function renderScoreBoardTable() {
 }
 
 function updateInningScore(index, team, value) {
+    // 🌟 修正：手打ちで無理やりマイナスが入力された場合、強制的に ""（空欄） にリセットする
+    if (value !== "" && parseInt(value) < 0) {
+        value = "";
+        currentGameForScore.innings[index][team] = value;
+        renderScoreBoardTable(); 
+        return;
+    }
+
     currentGameForScore.innings[index][team] = value;
     let totalUs = currentGameForScore.innings.reduce((sum, inn) => sum + (parseInt(inn.us) || 0), 0);
     let totalThem = currentGameForScore.innings.reduce((sum, inn) => sum + (parseInt(inn.them) || 0), 0);
@@ -1346,6 +1386,7 @@ function updateInningScore(index, team, value) {
 }
 
 function addInning() {
+    // 🌟 修正：追加するイニングも ""（空欄） に戻しました
     currentGameForScore.innings.push({ us: "", them: "" });
     renderScoreBoardTable();
 }
