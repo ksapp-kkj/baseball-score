@@ -72,11 +72,11 @@
     <div id="main-app-screen" class="app-screen">
         
         <header class="app-header">
-            <div>
-                <span id="current-team-display" class="header-team-name">チーム名未定</span>
-                <div id="team-id-display" class="header-team-id" onclick="copyTeamId()">ID: --- (タップでコピー)</div>
-            </div>
+            <div id="current-team-display" class="header-team-name">チーム名未定</div>
             <button class="btn-back-mypage" onclick="backToMyPage()">マイページへ戻る</button>
+            <div id="team-id-display" class="header-team-id" onclick="copyTeamId()">
+                ID: ---<br><span class="copy-text">(タップでコピー)</span>
+            </div>
         </header>
 
         <nav id="main-nav">
