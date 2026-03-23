@@ -139,7 +139,7 @@ h2 {
 }
 
 .form-group label {
-    flex: 0 0 75px; /* ラベルの幅を固定 */
+    flex: 0 0 75px; 
     font-size: 0.85rem;
     font-weight: bold;
     color: var(--grass-green);
@@ -147,7 +147,7 @@ h2 {
 }
 
 .form-group input {
-    flex: 1; /* 入力欄が残りの幅を埋める */
+    flex: 1; 
 }
 
 input, select {
@@ -181,7 +181,6 @@ button:active {
     font-weight: bold;
 }
 
-/* モーダル内および共通ボタン */
 .btn-save, .btn-edit-mode, .btn-delete, .btn-score {
     border: none;
     padding: 14px;
@@ -216,6 +215,8 @@ th, td {
     padding: 14px 10px;
     text-align: center;
     border-bottom: 1px solid #eee;
+    /* 🌟 文字の折り返し（改行）を禁止 */
+    white-space: nowrap; 
 }
 
 th {
@@ -283,9 +284,6 @@ th {
     flex: 1;
 }
 
-/**
- * 参加者バッジ用スタイル
- */
 .participant-badge {
     display: inline-flex;
     align-items: center;
@@ -669,7 +667,20 @@ th {
 .header-team-id { font-size: 0.75rem; color: #aaa; margin-top: 3px; cursor: pointer; }
 .btn-back-mypage { padding: 5px 10px; font-size: 0.8rem; background: var(--edit-color); color: white; border: none; border-radius: 6px; cursor: pointer; }
 
-.btn-manage-members { background: #e65100; color: white; border: none; padding: 14px; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer; }
+/* 🌟 ボタン中央配置の修正 */
+.btn-manage-members { 
+    background: #e65100; 
+    color: white; 
+    border: none; 
+    padding: 14px; 
+    border-radius: 8px; 
+    font-weight: bold; 
+    font-size: 1rem; 
+    cursor: pointer; 
+    display: block;
+    width: 100%;
+    margin: 0 auto 20px auto; 
+}
 
 .btn-small-edit { background: var(--edit-color); color: white; border: none; padding: 8px 12px; border-radius: 6px; font-weight: bold; font-size: 0.85rem; cursor: pointer; }
 .btn-small-action { padding: 6px 12px; font-size: 0.9rem; border: none; border-radius: 6px; font-weight: bold; color: white; cursor: pointer; }
@@ -743,3 +754,12 @@ th {
     text-align: center;
     margin-top: 15px;
 }
+
+/* 🌟 JS移管用ユーティリティクラス */
+.bg-danger { background: var(--danger-color) !important; }
+.bg-blue { background: var(--score-blue) !important; }
+.bg-green { background: #4caf50 !important; }
+.bg-gray { background: #999 !important; }
+.text-unregistered { color: #999; font-style: italic; }
+.member-email-text { font-size: 0.75rem; color: #999; margin-bottom: 3px; }
+.disabled-label { pointer-events: none; opacity: 0.6; }
