@@ -1523,6 +1523,21 @@ function importData(event) {
 
 function showHelpModal(pageId) {
     const helpData = {
+        // 🌟 新規追加：ログイン・新規登録画面のヘルプ
+        login: {
+            title: "ログイン・新規登録の使い方",
+            content: `
+                <div class="help-content-modal">
+                    <p><strong>【はじめての方（新規登録）】</strong></p>
+                    <p>1. お使いの「メールアドレス」と「お好きなパスワード」を入力します。</p>
+                    <p>2. 「ログイン / 新規登録」ボタンを押します。</p>
+                    <p>3. 確認画面が出たら「OK」を押し、ご自身の名前（表示名）を入力して登録完了です！</p>
+                    <hr style="margin: 15px 0; border: none; border-top: 1px dashed #ccc;">
+                    <p><strong>【すでに登録済みの方（ログイン）】</strong></p>
+                    <p>登録した「メールアドレス」と「パスワード」を入力し、「ログイン / 新規登録」ボタンを押してログインしてください。</p>
+                </div>`
+        },
+        
         team: {
             title: "チーム情報の使い方",
             content: `
