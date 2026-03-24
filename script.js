@@ -60,7 +60,6 @@ auth.onAuthStateChanged(async (user) => {
         if (uDoc.exists && uDoc.data().name) {
             document.getElementById('edit-username-input').value = uDoc.data().name;
         } else {
-            // 🌟 修正：勝手に名前を入れず、空欄（プレースホルダー表示）にする
             document.getElementById('edit-username-input').value = "";
         }
         
@@ -74,7 +73,6 @@ auth.onAuthStateChanged(async (user) => {
     }
 });
 
-// 🌟 純粋な「ログイン」だけの処理
 async function loginAccount() {
     const email = document.getElementById('email-input').value;
     const password = document.getElementById('password-input').value;
@@ -92,7 +90,6 @@ async function loginAccount() {
     }
 }
 
-// 🌟 「新規登録」だけの処理（ここで名前を聞く）
 async function registerAccount() {
     const email = document.getElementById('email-input').value;
     const password = document.getElementById('password-input').value;
@@ -101,7 +98,6 @@ async function registerAccount() {
     
     let userName = prompt("チーム内で表示する「あなたの表示名（ニックネーム）」を入力してください。\n※後からマイページでも変更できます。", "");
     if (userName === null) return; 
-    // 🌟 何も入力されなかった場合は空文字にする
     userName = userName.trim();
 
     try {
@@ -200,14 +196,67 @@ async function loadUserTeams() {
         let html = '';
         snapshot.forEach(doc => {
             const data = doc.data();
-            const isAdmin = data.admins && data.admins.includes(currentUser.uid);
-            const badge = isAdmin ? '<span class="admin-badge">管理者</span>' : '';
-            html += `<button class="team-select-btn" onclick="selectTeam('${doc.id}', '${data.team_name}')">${data.team_name} ${badge}</button>`;
+            const admins = data.admins || [];
+            
+            const ownerUid = data.owner || admins[0];
+            const isGM = (currentUser.uid === ownerUid);
+            const isAdmin = admins.includes(currentUser.uid);
+            
+            let badge = '';
+            if (isGM) {
+                badge = '<span class="admin-badge bg-danger">GM</span>';
+            } else if (isAdmin) {
+                badge = '<span class="admin-badge admin-badge-orange">管理者</span>';
+            }
+            
+            // 🌟 修正：インラインスタイルを撤廃しクラスに置き換え
+            html += `
+                <div class="team-item-wrapper">
+                    <button class="team-select-btn team-select-btn-flex" onclick="selectTeam('${doc.id}', '${data.team_name}')">${data.team_name} ${badge}</button>
+                    <button class="btn-small-action bg-gray btn-leave" onclick="leaveTeam('${doc.id}', '${data.team_name}')">退出</button>
+                </div>
+            `;
         });
         listEl.innerHTML = html;
         
     } catch(e) {
         listEl.innerHTML = '<p class="empty-message" style="color:red;">読み込みエラーが発生しました。</p>';
+        console.error(e);
+    }
+}
+
+async function leaveTeam(teamId, teamName) {
+    if(!confirm(`本当に「${teamName}」から退出しますか？\n退出すると、再度招待IDを入力しない限りこのチームには戻れません。`)) return;
+
+    try {
+        const docRef = db.collection("teams").doc(teamId);
+        const docSnap = await docRef.get();
+        
+        if (docSnap.exists) {
+            const data = docSnap.data();
+            const admins = data.admins || [];
+            const ownerUid = data.owner || admins[0]; 
+            
+            if (currentUser.uid === ownerUid) {
+                alert("【退出できません】\nあなたはチームの「GM」です。\nGMが退出することはできません。");
+                return;
+            }
+            
+            await docRef.update({
+                members: firebase.firestore.FieldValue.arrayRemove(currentUser.uid),
+                admins: firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
+            });
+            
+            alert("チームから退出しました。");
+            
+            if (currentTeamId === teamId) {
+                backToMyPage();
+            } else {
+                loadUserTeams(); 
+            }
+        }
+    } catch(e) {
+        alert("退出処理中にエラーが発生しました。: " + e.message);
         console.error(e);
     }
 }
@@ -234,6 +283,7 @@ async function createNewTeam() {
             team_name: teamName,
             manager_name: "",
             captain_name: "",
+            owner: currentUser.uid, 
             members: [currentUser.uid], 
             admins: [currentUser.uid],  
             players: [],
@@ -284,7 +334,6 @@ function copyTeamId() {
 async function selectTeam(teamId, teamName) {
     currentTeamId = teamId;
     document.getElementById('current-team-display').innerText = teamName;
-    // 🌟 修正：innerText から innerHTML に変え、改行タグ（<br>）を含める
     document.getElementById('team-id-display').innerHTML = `ID: ${teamId}<br><span class="copy-text">(タップでコピー)</span>`;
     
     try {
@@ -336,7 +385,7 @@ function backToMyPage() {
 }
 
 /**
- * 🌟 メンバー・権限管理機能（表示名とメールアドレス表示）
+ * 🌟 メンバー・権限管理機能（GM移管・削除廃止・5人制限）
  */
 async function showMemberManagementModal() {
     if (!currentTeamId) return;
@@ -348,58 +397,61 @@ async function showMemberManagementModal() {
         const teamData = doc.data();
         const members = teamData.members || [];
         const admins = teamData.admins || [];
+        
+        const ownerUid = teamData.owner || admins[0];
+        const iAmGM = (currentUser.uid === ownerUid); 
 
         let memberListHtml = '';
         
         for (let uid of members) {
             let displayName = "未設定"; 
-            let email = "---";
             try {
                 const uDoc = await db.collection("users").doc(uid).get();
                 if(uDoc.exists) {
                     const d = uDoc.data();
-                    // 🌟 名前が空の場合は「未設定」と表示
                     displayName = (d.name && d.name !== "") ? d.name : "未設定";
-                    email = d.email ? d.email : "---";
                 }
             } catch(e){}
 
+            const isThisUserGM = (uid === ownerUid); 
             const isAdmin = admins.includes(uid);
-            const isMe = uid === currentUser.uid;
-            
-            // 🌟 未設定の場合は文字を薄くするクラスを追加
             const nameClass = displayName === "未設定" ? "text-unregistered" : "";
 
             let actionHtml = '';
-            let removeHtml = '';
+            let badgeHtml = '';
 
-            if (isAdmin) {
-                if (admins.length === 1 && isMe) {
-                    actionHtml = `<span class="admin-note">※最後の管理者です</span>`;
-                } else {
-                    actionHtml = `<button class="btn-small-action btn-small-gray" onclick="toggleAdmin('${uid}', false)">管理者を外す</button>`;
-                    removeHtml = `<button class="btn-small-action bg-danger" onclick="removeMemberFromTeam('${uid}')">削除</button>`;
-                }
+            // 🌟 修正：インラインスタイルを撤廃しクラスに置き換え
+            if (isThisUserGM) {
+                badgeHtml = '<span class="admin-badge bg-danger badge-gm">GM</span>';
+            } else if (isAdmin) {
+                badgeHtml = '<span class="admin-badge admin-badge-orange">管理者</span>';
             } else {
-                actionHtml = `<button class="btn-small-action btn-small-blue" onclick="toggleAdmin('${uid}', true)">管理者にする</button>`;
-                removeHtml = `<button class="btn-small-action bg-danger" onclick="removeMemberFromTeam('${uid}')">削除</button>`;
+                badgeHtml = '<span class="viewer-badge">閲覧のみ</span>';
             }
 
-            if (isMe) {
-                removeHtml = '';
+            if (isThisUserGM) {
+                actionHtml = `<span class="admin-note">※最高権限</span>`;
+            } else {
+                if (isAdmin) {
+                    actionHtml += `<button class="btn-small-action btn-small-gray" onclick="toggleAdmin('${uid}', false)">管理者を外す</button>`;
+                } else {
+                    actionHtml += `<button class="btn-small-action btn-small-blue" onclick="toggleAdmin('${uid}', true)">管理者にする</button>`;
+                }
+                
+                // 🌟 修正：インラインスタイルを撤廃しクラスに置き換え
+                if (iAmGM) {
+                    actionHtml += `<button class="btn-small-action bg-danger ml-8" onclick="transferGM('${uid}', '${displayName}')">GMを譲渡</button>`;
+                }
             }
 
-            // 🌟 インラインスタイルを排除し、すべてCSSクラスで表現
             memberListHtml += `
                 <div class="member-list-item">
                     <div>
                         <div class="member-name-text ${nameClass}">${displayName}</div>
-                        <div class="member-email-text">${email}</div>
-                        ${isAdmin ? '<span class="admin-badge admin-badge-orange">管理者</span>' : '<span class="viewer-badge">閲覧のみ</span>'}
+                        ${badgeHtml}
                     </div>
                     <div class="flex-gap-8">
                         ${actionHtml}
-                        ${removeHtml}
                     </div>
                 </div>
             `;
@@ -408,7 +460,7 @@ async function showMemberManagementModal() {
         document.getElementById('modal-title').innerText = "チームメンバーと権限の管理";
         document.getElementById('modal-body').innerHTML = `
             <div class="edit-form">
-                <p class="help-text mb-15">不要なアカウント等を「削除」ボタンでチームから外すことができます。</p>
+                <p class="help-text mb-15">管理者はGMを含めて【最大5人】までです。GMは任意のメンバーに権限を譲渡できます。</p>
                 <div class="member-scroll-container">
                     ${memberListHtml}
                 </div>
@@ -424,35 +476,50 @@ async function showMemberManagementModal() {
 }
 
 async function toggleAdmin(uid, makeAdmin) {
-    if(!confirm(makeAdmin ? "このメンバーを管理者にしますか？" : "このメンバーから管理者権限を外しますか？（閲覧のみになります）")) return;
-    
     try {
+        const docRef = db.collection("teams").doc(currentTeamId);
+        
         if (makeAdmin) {
-            await db.collection("teams").doc(currentTeamId).update({
+            const docSnap = await docRef.get();
+            const currentAdmins = docSnap.data().admins || [];
+            
+            if (currentAdmins.length >= 5) {
+                alert("【上限エラー】\n管理者はGMを含めて最大5人までです。これ以上追加できません。");
+                return;
+            }
+            
+            if(!confirm("このメンバーを管理者にしますか？")) return;
+            await docRef.update({
                 admins: firebase.firestore.FieldValue.arrayUnion(uid)
             });
         } else {
-            await db.collection("teams").doc(currentTeamId).update({
+            if(!confirm("このメンバーから管理者権限を外しますか？（閲覧のみになります）")) return;
+            await docRef.update({
                 admins: firebase.firestore.FieldValue.arrayRemove(uid)
             });
         }
         showMemberManagementModal();
     } catch(e) {
         alert("権限の変更に失敗しました。");
+        console.error(e);
     }
 }
 
-async function removeMemberFromTeam(uid) {
-    if(!confirm("このユーザーをチームから削除（追放）しますか？")) return;
-    
+async function transferGM(uid, displayName) {
+    if(!confirm(`本当に「${displayName}」さんにGM（最高権限）を譲渡しますか？\n※あなた自身は通常の管理者に戻ります。`)) return;
+
     try {
-        await db.collection("teams").doc(currentTeamId).update({
-            members: firebase.firestore.FieldValue.arrayRemove(uid),
-            admins: firebase.firestore.FieldValue.arrayRemove(uid)
+        const docRef = db.collection("teams").doc(currentTeamId);
+        
+        await docRef.update({
+            owner: uid,
+            admins: firebase.firestore.FieldValue.arrayUnion(uid)
         });
-        showMemberManagementModal(); 
+        
+        alert(`GM権限を「${displayName}」さんに移管しました。`);
+        showMemberManagementModal();
     } catch(e) {
-        alert("削除に失敗しました。");
+        alert("GMの譲渡に失敗しました。");
         console.error(e);
     }
 }
@@ -1189,17 +1256,16 @@ function renderAtBatMatrix() {
             </div>
 
             <div class="modal-btns mt-15">
-                <button class="btn-save" style="background:#999;" onclick="closeModal();">閉じる</button>
+                <button class="btn-save bg-gray" onclick="closeModal();">閉じる</button>
             </div>
         </div>
     `;
     document.getElementById('modal-overlay').style.display = 'flex';
 }
 
-// 🌟 新規追加：打席列を削除する関数
 function removeAtBatColumn() {
     if (currentAtBatColumns > 1) {
-        currentAtBatColumns--; // 列の表示数を減らす
+        currentAtBatColumns--; 
         renderAtBatMatrix();
     } else {
         alert("これ以上打席列を削除できません。");
@@ -1307,7 +1373,6 @@ function clearAtBatInput(lineIdx, atBatIdx) {
 function showScoreInputModal(gameId) {
     currentGameForScore = games.find(game => game.id === gameId);
     
-    // 🌟 修正：初期状態を "0" から ""（未入力の空欄）に戻しました
     if (!currentGameForScore.innings) currentGameForScore.innings = Array(9).fill().map(() => ({ us: "", them: "" }));
 
     const isAdmin = currentTeamAdmins.includes(currentUser.uid);
@@ -1349,7 +1414,6 @@ function renderScoreBoardTable() {
     const g = currentGameForScore;
     const headerHtml = g.innings.map((_, i) => `<th>${i + 1}</th>`).join('');
     
-    // ※マイナス入力防止の min="0" はそのまま残しています
     const usHtml = g.innings.map((inning, i) => `<td><input type="number" min="0" class="score-input" value="${inning.us}" oninput="updateInningScore(${i}, 'us', this.value)"></td>`).join('');
     const themHtml = g.innings.map((inning, i) => `<td><input type="number" min="0" class="score-input" value="${inning.them}" oninput="updateInningScore(${i}, 'them', this.value)"></td>`).join('');
     
@@ -1370,7 +1434,6 @@ function renderScoreBoardTable() {
 }
 
 function updateInningScore(index, team, value) {
-    // 🌟 修正：手打ちで無理やりマイナスが入力された場合、強制的に ""（空欄） にリセットする
     if (value !== "" && parseInt(value) < 0) {
         value = "";
         currentGameForScore.innings[index][team] = value;
@@ -1386,7 +1449,6 @@ function updateInningScore(index, team, value) {
 }
 
 function addInning() {
-    // 🌟 修正：追加するイニングも ""（空欄） に戻しました
     currentGameForScore.innings.push({ us: "", them: "" });
     renderScoreBoardTable();
 }
@@ -1523,7 +1585,6 @@ function importData(event) {
 
 function showHelpModal(pageId) {
     const helpData = {
-        // 🌟 新規追加：ログイン・新規登録画面のヘルプ
         login: {
             title: "ログイン・新規登録の使い方",
             content: `
@@ -1532,12 +1593,12 @@ function showHelpModal(pageId) {
                     <p>1. お使いの「メールアドレス」と「お好きなパスワード」を入力します。</p>
                     <p>2. 「ログイン / 新規登録」ボタンを押します。</p>
                     <p>3. 確認画面が出たら「OK」を押し、ご自身の名前（表示名）を入力して登録完了です！</p>
-                    <hr style="margin: 15px 0; border: none; border-top: 1px dashed #ccc;">
+                    <hr class="modal-hr">
                     <p><strong>【すでに登録済みの方（ログイン）】</strong></p>
                     <p>登録した「メールアドレス」と「パスワード」を入力し、「ログイン / 新規登録」ボタンを押してログインしてください。</p>
                 </div>`
         },
-        
+
         team: {
             title: "チーム情報の使い方",
             content: `
