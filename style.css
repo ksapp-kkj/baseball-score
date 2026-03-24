@@ -215,7 +215,6 @@ th, td {
     padding: 14px 10px;
     text-align: center;
     border-bottom: 1px solid #eee;
-    /* 🌟 文字の折り返し（改行）を禁止 */
     white-space: nowrap; 
 }
 
@@ -662,13 +661,13 @@ th {
 .edit-name-wrapper { margin-top: 30px; padding-top: 20px; border-top: 1px dashed #ccc; text-align: left; }
 .edit-name-label { font-size: 0.85rem; font-weight: bold; color: var(--grass-green); }
 
-/* 🌟 ヘッダー関連のスタイルを修正 */
+/* 🌟 ヘッダー関連のスタイル */
 .app-header { 
     display: flex; 
-    flex-direction: column; /* 横並びから縦並びに変更 */
+    flex-direction: column; 
     justify-content: center; 
-    align-items: center;    /* 左右の中央揃え */
-    gap: 12px;              /* 各要素の間の余白 */
+    align-items: center;    
+    gap: 12px;              
     padding: 15px 20px; 
     background: #2c3e50; 
     color: white; 
@@ -676,14 +675,14 @@ th {
 }
 .header-team-name { 
     font-weight: bold; 
-    font-size: 1.4rem;      /* 文字を少し大きく */
+    font-size: 1.4rem;      
     letter-spacing: 1px;
 }
 .header-team-id { 
     font-size: 0.95rem; 
     color: #fff; 
     cursor: pointer; 
-    background: rgba(255, 255, 255, 0.15); /* コピーできる枠として分かりやすく装飾 */
+    background: rgba(255, 255, 255, 0.15); 
     padding: 8px 20px;
     border-radius: 8px;
     line-height: 1.4;
@@ -698,7 +697,7 @@ th {
     background: var(--edit-color); 
     color: white; 
     border: none; 
-    border-radius: 20px;    /* 丸みを持たせて押しやすく */
+    border-radius: 20px;    
     cursor: pointer; 
     font-weight: bold;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
@@ -763,7 +762,7 @@ th {
 .empty-text { font-size: 0.85rem; color: #666; }
 
 /**
- * 🌟 閲覧専用モード用のスタイル（入力ロックとボタン非表示）
+ * 🌟 閲覧専用モード用のスタイル
  */
 .viewer-mode .admin-only {
     display: none !important;
@@ -777,7 +776,6 @@ th {
     border: 1px dashed #ccc !important;
 }
 
-/* パスワードリセットボタン */
 .btn-reset-password {
     background: none; 
     border: none; 
@@ -792,7 +790,7 @@ th {
     margin-top: 15px;
 }
 
-/* 🌟 JS移管用ユーティリティクラス */
+/* 🌟 追加：JSから移管したユーティリティ＆レイアウトクラス */
 .bg-danger { background: var(--danger-color) !important; }
 .bg-blue { background: var(--score-blue) !important; }
 .bg-green { background: #4caf50 !important; }
@@ -800,3 +798,10 @@ th {
 .text-unregistered { color: #999; font-style: italic; }
 .member-email-text { font-size: 0.75rem; color: #999; margin-bottom: 3px; }
 .disabled-label { pointer-events: none; opacity: 0.6; }
+
+.team-item-wrapper { display: flex; gap: 8px; margin-bottom: 15px; align-items: stretch; }
+.team-select-btn-flex { margin-bottom: 0; flex: 1; }
+.btn-leave { padding: 0 15px; }
+.badge-gm { margin-left: 0; }
+.ml-8 { margin-left: 8px; }
+.modal-hr { margin: 15px 0; border: none; border-top: 1px dashed #ccc; }
