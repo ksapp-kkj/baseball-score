@@ -152,11 +152,14 @@ h2 {
 
 input, select {
     width: 100%;
+    max-width: 100%;
     padding: 12px;
     box-sizing: border-box;
     border: 1px solid #ddd;
     border-radius: 8px;
     font-size: 1rem;
+    appearance: none;
+    -webkit-appearance: none;
 }
 
 /**
@@ -326,6 +329,7 @@ th {
     max-height: 85vh;
     overflow-y: auto;
     position: relative;
+    box-sizing: border-box;
 }
 
 .close-btn {
@@ -597,6 +601,7 @@ th {
     cursor: pointer;
     transition: all 0.2s;
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    box-sizing: border-box;
 }
 
 .team-select-btn:hover {
