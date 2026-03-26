@@ -11,23 +11,46 @@
 
     <div id="login-screen" class="app-screen active">
         <div class="login-wrapper">
-            <h2>⚾️野球スコア管理ログイン <span class="help-trigger" onclick="showHelpModal('login')">📝</span></h2>
-            <div class="card mt-20">
+            <h2>⚾️野球スコア管理 <span class="help-trigger" onclick="showHelpModal('login')">📝</span></h2>
+            
+            <div id="login-form-container" class="card mt-20">
+                <h3 class="mb-15 color-grass">ログイン</h3>
                 <div class="form-group">
-                    <input type="email" id="email-input" class="w-100 mb-10" placeholder="メールアドレス">
+                    <input type="email" id="login-email-input" class="w-100 mb-10" placeholder="メールアドレス">
                 </div>
                 <div class="form-group">
-                    <input type="password" id="password-input" class="w-100 mb-15" placeholder="パスワード">
+                    <input type="password" id="login-password-input" class="w-100 mb-15" placeholder="パスワード">
                 </div>
                 
-                <div class="flex-gap-8 mt-15">
-                    <button class="btn-add flex-1 p-10" onclick="loginAccount()">ログイン</button>
-                    <button class="btn-small-action btn-small-orange flex-1 p-10" onclick="registerAccount()">新規登録</button>
-                </div>
+                <button class="btn-add w-100 p-10 mb-15" onclick="loginAccount()">ログイン</button>
+                
+                <hr class="modal-hr">
+                
+                <p class="help-text mb-10">はじめての方はこちら</p>
+                <button class="btn-small-action btn-small-orange w-100 p-10" onclick="showRegisterForm()">新規アカウント登録</button>
                 
                 <div class="mt-15-center">
                     <button onclick="resetPassword()" class="btn-reset-password">パスワードを忘れた場合</button>
                 </div>
+            </div>
+
+            <div id="register-form-container" class="card mt-20 hidden">
+                <h3 class="mb-15 color-orange">新規アカウント登録</h3>
+                <div class="form-group">
+                    <input type="email" id="register-email-input" class="w-100 mb-10" placeholder="メールアドレス">
+                </div>
+                <div class="form-group">
+                    <input type="password" id="register-password-input" class="w-100 mb-10" placeholder="パスワード (6文字以上)">
+                </div>
+                <div class="form-group">
+                    <input type="text" id="register-name-input" class="w-100 mb-15" placeholder="あなたの表示名（ニックネーム）">
+                </div>
+                
+                <button class="btn-small-action btn-small-orange w-100 p-10 mb-15 text-lg" onclick="registerAccount()">登録して始める</button>
+                
+                <hr class="modal-hr">
+                
+                <button class="btn-small-action btn-small-gray w-100 p-10" onclick="showLoginForm()">ログイン画面に戻る</button>
             </div>
         </div>
     </div>
