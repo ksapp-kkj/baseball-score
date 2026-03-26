@@ -810,3 +810,8 @@ th {
 .badge-gm { margin-left: 0; }
 .ml-8 { margin-left: 8px; }
 .modal-hr { margin: 15px 0; border: none; border-top: 1px dashed #ccc; }
+
+/* 🌟 新規追加：ログイン・登録画面用のテキストスタイル */
+.color-grass { color: var(--grass-green); }
+.color-orange { color: #ff9800; }
+.text-lg { font-size: 1rem; }
