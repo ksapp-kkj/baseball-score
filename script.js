@@ -13,6 +13,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const auth = firebase.auth();
+auth.languageCode = 'ja'; // 日本語メール設定
 
 /**
  * 🌟 アプリ全体の状態管理
@@ -50,6 +51,19 @@ function showScreen(screenId) {
 }
 
 /**
+ * 🌟 ログイン・新規登録画面の切り替え
+ */
+function showRegisterForm() {
+    document.getElementById('login-form-container').classList.add('hidden');
+    document.getElementById('register-form-container').classList.remove('hidden');
+}
+
+function showLoginForm() {
+    document.getElementById('register-form-container').classList.add('hidden');
+    document.getElementById('login-form-container').classList.remove('hidden');
+}
+
+/**
  * 🌟 Firebase 認証（ログイン・ログアウト・アカウント関連）
  */
 auth.onAuthStateChanged(async (user) => {
@@ -74,8 +88,8 @@ auth.onAuthStateChanged(async (user) => {
 });
 
 async function loginAccount() {
-    const email = document.getElementById('email-input').value;
-    const password = document.getElementById('password-input').value;
+    const email = document.getElementById('login-email-input').value;
+    const password = document.getElementById('login-password-input').value;
     
     if(!email || !password) return alert("メールアドレスとパスワードを入力してください");
     
@@ -83,7 +97,7 @@ async function loginAccount() {
         await auth.signInWithEmailAndPassword(email, password);
     } catch(error) {
         if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-login-credentials') {
-            alert("アカウントが見つからないか、パスワードが間違っています。\n初めての方は「新規登録」ボタンから登録してください。");
+            alert("アカウントが見つからないか、パスワードが間違っています。\n初めての方は「新規アカウント登録」から登録してください。");
         } else {
             alert("ログインエラー: " + error.message);
         }
@@ -91,22 +105,28 @@ async function loginAccount() {
 }
 
 async function registerAccount() {
-    const email = document.getElementById('email-input').value;
-    const password = document.getElementById('password-input').value;
+    const email = document.getElementById('register-email-input').value;
+    const password = document.getElementById('register-password-input').value;
+    const userNameInput = document.getElementById('register-name-input').value;
     
     if(!email || !password) return alert("登録するメールアドレスとパスワードを入力してください");
-    
-    let userName = prompt("チーム内で表示する「あなたの表示名（ニックネーム）」を入力してください。\n※後からマイページでも変更できます。", "");
-    if (userName === null) return; 
-    userName = userName.trim();
+    if(!userNameInput.trim()) return alert("表示名（ニックネーム）を入力してください");
+
+    const userName = userNameInput.trim();
 
     try {
         const userCred = await auth.createUserWithEmailAndPassword(email, password);
         await db.collection("users").doc(userCred.user.uid).set({ email: email, name: userName }, { merge: true });
+        
         alert("新規登録が完了しました！");
+        
+        document.getElementById('register-email-input').value = "";
+        document.getElementById('register-password-input').value = "";
+        document.getElementById('register-name-input').value = "";
+        
     } catch(error) {
         if (error.code === 'auth/email-already-in-use') {
-            alert("このメールアドレスは既に登録されています。「ログイン」ボタンをお試しください。");
+            alert("このメールアドレスは既に登録されています。「ログイン画面に戻る」を押してログインしてください。");
         } else {
             alert("登録エラー: " + error.message);
         }
@@ -114,7 +134,8 @@ async function registerAccount() {
 }
 
 async function resetPassword() {
-    const email = prompt("登録したメールアドレスを入力してください。\nパスワード再設定用のメールを送信します。");
+    const currentEmail = document.getElementById('login-email-input').value;
+    const email = prompt("登録したメールアドレスを入力してください。\nパスワード再設定用のメールを送信します。", currentEmail);
     if (!email) return;
     try {
         await auth.sendPasswordResetEmail(email);
@@ -209,7 +230,6 @@ async function loadUserTeams() {
                 badge = '<span class="admin-badge admin-badge-orange">管理者</span>';
             }
             
-            // 🌟 修正：インラインスタイルを撤廃しクラスに置き換え
             html += `
                 <div class="team-item-wrapper">
                     <button class="team-select-btn team-select-btn-flex" onclick="selectTeam('${doc.id}', '${data.team_name}')">${data.team_name} ${badge}</button>
@@ -420,7 +440,6 @@ async function showMemberManagementModal() {
             let actionHtml = '';
             let badgeHtml = '';
 
-            // 🌟 修正：インラインスタイルを撤廃しクラスに置き換え
             if (isThisUserGM) {
                 badgeHtml = '<span class="admin-badge bg-danger badge-gm">GM</span>';
             } else if (isAdmin) {
@@ -438,7 +457,6 @@ async function showMemberManagementModal() {
                     actionHtml += `<button class="btn-small-action btn-small-blue" onclick="toggleAdmin('${uid}', true)">管理者にする</button>`;
                 }
                 
-                // 🌟 修正：インラインスタイルを撤廃しクラスに置き換え
                 if (iAmGM) {
                     actionHtml += `<button class="btn-small-action bg-danger ml-8" onclick="transferGM('${uid}', '${displayName}')">GMを譲渡</button>`;
                 }
