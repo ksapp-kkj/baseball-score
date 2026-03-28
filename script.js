@@ -33,6 +33,7 @@ let tempLineup = [];
 let currentAtBatColumns = 5; 
 let currentStatsYear = "all"; 
 let currentRecordYear = "all";
+let currentGameYear = "all"; // 🌟 試合一覧・スコア入力の表示年フィルター用
 let tempParticipants = [];
 let tempPitchers = []; 
 let isGameDeleteMode = false; 
@@ -50,9 +51,6 @@ function showScreen(screenId) {
     }
 }
 
-/**
- * 🌟 ログイン・新規登録画面の切り替え
- */
 function showRegisterForm() {
     document.getElementById('login-form-container').classList.add('hidden');
     document.getElementById('register-form-container').classList.remove('hidden');
@@ -104,12 +102,9 @@ async function registerAccount() {
     const email = document.getElementById('register-email-input').value;
     const password = document.getElementById('register-password-input').value;
     const userNameInput = document.getElementById('register-name-input').value;
-    
     if(!email || !password) return alert("登録するメールアドレスとパスワードを入力してください");
     if(!userNameInput.trim()) return alert("表示名（ニックネーム）を入力してください");
-
     const userName = userNameInput.trim();
-
     try {
         const userCred = await auth.createUserWithEmailAndPassword(email, password);
         await db.collection("users").doc(userCred.user.uid).set({ email: email, name: userName }, { merge: true });
@@ -133,9 +128,7 @@ async function resetPassword() {
     try {
         await auth.sendPasswordResetEmail(email);
         alert("パスワード再設定メールを送信しました！\nメール内のリンクから新しいパスワードを設定してください。");
-    } catch (e) {
-        alert("エラーが発生しました。メールアドレスが正しいか確認してください。\n" + e.message);
-    }
+    } catch (e) { alert("エラーが発生しました。\n" + e.message); }
 }
 
 function logout() {
@@ -159,11 +152,8 @@ async function deleteAccount() {
         await currentUser.delete();
         alert("アカウントと関連データを完全に削除しました。ご利用ありがとうございました。");
     } catch (error) {
-        if (error.code === 'auth/requires-recent-login') {
-            alert("🔒 セキュリティのため、アカウントを削除するには「一度ログアウトし、再度ログイン」し直してからすぐに実行してください。");
-        } else {
-            alert("エラーが発生しました: " + error.message);
-        }
+        if (error.code === 'auth/requires-recent-login') alert("🔒 セキュリティのため、アカウントを削除するには「一度ログアウトし、再度ログイン」し直してからすぐに実行してください。");
+        else alert("エラーが発生しました: " + error.message);
     }
 }
 
@@ -206,7 +196,6 @@ async function loadUserTeams() {
             let badge = '';
             if (isGM) { badge = '<span class="admin-badge bg-danger">GM</span>'; } 
             else if (isAdmin) { badge = '<span class="admin-badge admin-badge-orange">管理者</span>'; }
-            
             html += `
                 <div class="team-item-wrapper">
                     <button class="team-select-btn team-select-btn-flex" onclick="selectTeam('${doc.id}', '${data.team_name}')">${data.team_name} ${badge}</button>
@@ -230,10 +219,7 @@ async function leaveTeam(teamId, teamName) {
             const data = docSnap.data();
             const admins = data.admins || [];
             const ownerUid = data.owner || admins[0]; 
-            if (currentUser.uid === ownerUid) {
-                alert("【退出できません】\nあなたはチームの「GM」です。\nGMが退出することはできません。");
-                return;
-            }
+            if (currentUser.uid === ownerUid) return alert("【退出できません】\nあなたはチームの「GM」です。\nGMが退出することはできません。");
             await docRef.update({
                 members: firebase.firestore.FieldValue.arrayRemove(currentUser.uid),
                 admins: firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
@@ -242,7 +228,7 @@ async function leaveTeam(teamId, teamName) {
             if (currentTeamId === teamId) backToMyPage();
             else loadUserTeams(); 
         }
-    } catch(e) { alert("退出処理中にエラー: " + e.message); }
+    } catch(e) { alert("退出処理中にエラーが発生しました。: " + e.message); console.error(e); }
 }
 
 function showCreateTeamModal() {
@@ -250,7 +236,9 @@ function showCreateTeamModal() {
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
             <input type="text" id="new-team-name" class="large-select w-100" placeholder="チーム名を入力">
-            <div class="modal-btns mt-20"><button class="btn-save" onclick="createNewTeam()">作成する</button></div>
+            <div class="modal-btns mt-20">
+                <button class="btn-save" onclick="createNewTeam()">作成する</button>
+            </div>
         </div>
     `;
     document.getElementById('modal-overlay').style.display = 'flex';
@@ -261,11 +249,8 @@ async function createNewTeam() {
     if (!teamName) return alert("チーム名を入力してください");
     try {
         await db.collection("teams").add({
-            team_name: teamName,
-            manager_name: "", captain_name: "",
-            owner: currentUser.uid, 
-            members: [currentUser.uid], 
-            admins: [currentUser.uid],  
+            team_name: teamName, manager_name: "", captain_name: "",
+            owner: currentUser.uid, members: [currentUser.uid], admins: [currentUser.uid],  
             players: [], games: []
         });
         closeModal();
@@ -280,19 +265,19 @@ async function joinTeam() {
     try {
         const docRef = db.collection("teams").doc(teamId);
         const doc = await docRef.get();
-        if (!doc.exists) return alert("入力されたIDのチームが見つかりません。");
+        if (!doc.exists) return alert("入力されたIDのチームが見つかりません。IDが間違っていないか確認してください。");
         await docRef.update({ members: firebase.firestore.FieldValue.arrayUnion(currentUser.uid) });
         alert("チームに参加しました！");
         teamIdInput.value = ""; 
         loadUserTeams(); 
-    } catch (error) { alert("参加処理中にエラーが発生しました。"); }
+    } catch (error) { alert("参加処理中にエラーが発生しました。"); console.error(error); }
 }
 
 function copyTeamId() {
     if (!currentTeamId) return;
     navigator.clipboard.writeText(currentTeamId).then(() => {
-        alert("招待ID「" + currentTeamId + "」をコピーしました！");
-    }).catch(err => { alert("コピーに失敗しました: " + currentTeamId); });
+        alert("招待ID「" + currentTeamId + "」をコピーしました！\nLINE等でメンバーに共有して、チームに参加してもらってください。");
+    }).catch(err => { alert("コピーに失敗しました。このIDを手動でコピーしてください: " + currentTeamId); });
 }
 
 async function selectTeam(teamId, teamName) {
@@ -325,7 +310,7 @@ async function selectTeam(teamId, teamName) {
         updateTeamRecord();
         renderStatsPage();
         showScreen('main-app-screen');
-    } catch(e) { alert("チームデータの読み込みに失敗しました"); }
+    } catch(e) { alert("チームデータの読み込みに失敗しました"); console.error(e); }
 }
 
 function backToMyPage() {
@@ -337,7 +322,7 @@ function backToMyPage() {
 }
 
 /**
- * 🌟 メンバー・権限管理
+ * 🌟 メンバー・権限管理機能
  */
 async function showMemberManagementModal() {
     if (!currentTeamId) return;
@@ -355,13 +340,16 @@ async function showMemberManagementModal() {
             let displayName = "未設定"; 
             try {
                 const uDoc = await db.collection("users").doc(uid).get();
-                if(uDoc.exists && uDoc.data().name) displayName = uDoc.data().name;
+                if(uDoc.exists) {
+                    const d = uDoc.data();
+                    displayName = (d.name && d.name !== "") ? d.name : "未設定";
+                }
             } catch(e){}
             const isThisUserGM = (uid === ownerUid); 
             const isAdmin = admins.includes(uid);
             const nameClass = displayName === "未設定" ? "text-unregistered" : "";
-            let actionHtml = '';
-            let badgeHtml = '';
+            let actionHtml = ''; let badgeHtml = '';
+
             if (isThisUserGM) badgeHtml = '<span class="admin-badge bg-danger badge-gm">GM</span>';
             else if (isAdmin) badgeHtml = '<span class="admin-badge admin-badge-orange">管理者</span>';
             else badgeHtml = '<span class="viewer-badge">閲覧のみ</span>';
@@ -375,17 +363,22 @@ async function showMemberManagementModal() {
             }
             memberListHtml += `
                 <div class="member-list-item">
-                    <div><div class="member-name-text ${nameClass}">${displayName}</div>${badgeHtml}</div>
+                    <div>
+                        <div class="member-name-text ${nameClass}">${displayName}</div>
+                        ${badgeHtml}
+                    </div>
                     <div class="flex-gap-8">${actionHtml}</div>
-                </div>`;
+                </div>
+            `;
         }
-        document.getElementById('modal-title').innerText = "チームメンバーと権限管理";
+        document.getElementById('modal-title').innerText = "チームメンバーと権限の管理";
         document.getElementById('modal-body').innerHTML = `
             <div class="edit-form">
                 <p class="help-text mb-15">管理者はGMを含めて【最大5人】までです。GMは任意のメンバーに権限を譲渡できます。</p>
                 <div class="member-scroll-container">${memberListHtml}</div>
                 <div class="modal-btns"><button class="btn-save" onclick="closeModal()">閉じる</button></div>
-            </div>`;
+            </div>
+        `;
     } catch(e) { alert("メンバー情報の取得に失敗しました。"); closeModal(); }
 }
 
@@ -395,25 +388,25 @@ async function toggleAdmin(uid, makeAdmin) {
         if (makeAdmin) {
             const docSnap = await docRef.get();
             const currentAdmins = docSnap.data().admins || [];
-            if (currentAdmins.length >= 5) return alert("【上限エラー】\n管理者は最大5人までです。");
+            if (currentAdmins.length >= 5) return alert("【上限エラー】\n管理者はGMを含めて最大5人までです。これ以上追加できません。");
             if(!confirm("このメンバーを管理者にしますか？")) return;
             await docRef.update({ admins: firebase.firestore.FieldValue.arrayUnion(uid) });
         } else {
-            if(!confirm("このメンバーから管理者権限を外しますか？")) return;
+            if(!confirm("このメンバーから管理者権限を外しますか？（閲覧のみになります）")) return;
             await docRef.update({ admins: firebase.firestore.FieldValue.arrayRemove(uid) });
         }
         showMemberManagementModal();
-    } catch(e) { alert("権限の変更に失敗しました。"); }
+    } catch(e) { alert("権限の変更に失敗しました。"); console.error(e); }
 }
 
 async function transferGM(uid, displayName) {
-    if(!confirm(`本当に「${displayName}」さんにGM（最高権限）を譲渡しますか？`)) return;
+    if(!confirm(`本当に「${displayName}」さんにGM（最高権限）を譲渡しますか？\n※あなた自身は通常の管理者に戻ります。`)) return;
     try {
         const docRef = db.collection("teams").doc(currentTeamId);
         await docRef.update({ owner: uid, admins: firebase.firestore.FieldValue.arrayUnion(uid) });
         alert(`GM権限を「${displayName}」さんに移管しました。`);
         showMemberManagementModal();
-    } catch(e) { alert("GMの譲渡に失敗しました。"); }
+    } catch(e) { alert("GMの譲渡に失敗しました。"); console.error(e); }
 }
 
 window.onload = function() {
@@ -447,7 +440,7 @@ function setupNavigation() {
             const target = item.getAttribute('data-target');
             navItems.forEach(nav => nav.classList.remove('active'));
             item.classList.add('active');
-            sections.forEach(sec => sec.classList.toggle('active', sec.id === target));
+            sections.forEach(sec => { sec.classList.toggle('active', sec.id === target); });
             if (target === 'stats-page') renderStatsPage();
         });
     });
@@ -459,25 +452,24 @@ function getSuggestedAssistantNumber() {
         if (p.number !== "無") usedNumbers.add(Number(p.number));
         if (p.pastNumbers) p.pastNumbers.forEach(n => usedNumbers.add(Number(n)));
     });
-    for (let i = 100; i <= 999; i++) {
-        if (!usedNumbers.has(i)) return i;
-    }
+    for (let i = 100; i <= 999; i++) { if (!usedNumbers.has(i)) return i; }
     return 100;
 }
 
 function formatNumberInput(inputEl) {
     if (!inputEl.value) return;
     let val = inputEl.value;
-    val = val.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/[^0-9]/g, '');
+    val = val.replace(/[０-９]/g, function(s) { return String.fromCharCode(s.charCodeAt(0) - 0xFEE0); });
+    val = val.replace(/[^0-9]/g, '');
     inputEl.value = val;
 }
 
 function convertToKatakana(str) {
-    return str.replace(/[\u3041-\u3096]/g, match => String.fromCharCode(match.charCodeAt(0) + 0x60));
+    return str.replace(/[\u3041-\u3096]/g, function(match) { return String.fromCharCode(match.charCodeAt(0) + 0x60); });
 }
 
 /**
- * 🌟 選手管理（強化ID・ステータス対応）
+ * 🌟 選手情報管理（強化版ID・ステータス管理）
  */
 function showAddPlayerModal() {
     document.getElementById('modal-title').innerText = "選手登録";
@@ -487,12 +479,23 @@ function showAddPlayerModal() {
     const suggestedNum = getSuggestedAssistantNumber();
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
-            <input type="text" inputmode="numeric" id="p-number" placeholder="背番号 (助っ人候補: ${suggestedNum})" onblur="formatNumberInput(this)">
-            <input type="text" id="p-name" placeholder="氏名">
-            <input type="text" id="p-furigana" placeholder="フリガナ (任意)" onblur="this.value = convertToKatakana(this.value)">
+            <input type="text" inputmode="numeric" id="p-number" placeholder="背番号 (助っ人候補: ${suggestedNum})" oninput="formatNumberInput(this)">
+            
+            <div class="flex-gap-8">
+                <input type="text" id="p-name-last" class="flex-1" placeholder="苗字">
+                <input type="text" id="p-name-first" class="flex-1" placeholder="名前">
+            </div>
+
+            <div class="flex-gap-8">
+                <input type="text" id="p-furigana-last" class="flex-1" placeholder="フリガナ(苗字)" onblur="this.value = convertToKatakana(this.value)">
+                <input type="text" id="p-furigana-first" class="flex-1" placeholder="フリガナ(名前)" onblur="this.value = convertToKatakana(this.value)">
+            </div>
+
             <select id="p-side">
-                <option value="右投右打">右投右打</option><option value="右投左打">右投左打</option>
-                <option value="左投左打">左投左打</option><option value="左投右打">左投右打</option>
+                <option value="右投右打">右投右打</option>
+                <option value="右投左打">右投左打</option>
+                <option value="左投左打">左投左打</option>
+                <option value="左投右打">左投右打</option>
             </select>
             <select id="p-main-pos">
                 <option value="" disabled selected>メイン守備</option>
@@ -508,35 +511,48 @@ function showAddPlayerModal() {
 
 function addPlayer() {
     if (!checkAdmin()) return;
-    const name = document.getElementById('p-name').value;
-    const furigana = document.getElementById('p-furigana').value; 
+    
+    const lastName = document.getElementById('p-name-last').value.trim();
+    const firstName = document.getElementById('p-name-first').value.trim();
+    if(!lastName || !firstName) return alert("苗字と名前を両方入力してください");
+    const fullName = lastName + " " + firstName;
+
+    // 🌟 フリガナを取得し、半角スペースで結合
+    const furiLast = document.getElementById('p-furigana-last').value.trim();
+    const furiFirst = document.getElementById('p-furigana-first').value.trim();
+    let furigana = "";
+    if (furiLast || furiFirst) {
+        // どちらか片方だけ入力された場合も考慮して trim() をかける
+        furigana = (furiLast + " " + furiFirst).trim();
+        if (!/^[ァ-ヶー・\s　]+$/.test(furigana)) {
+            return alert("エラー：フリガナは「全角カタカナ」のみ入力してください。");
+        }
+    }
+
     const mainPos = document.getElementById('p-main-pos').value;
     let numInput = document.getElementById('p-number').value;
-
-    if(!name || !mainPos) return alert("名前とメイン守備は必須です");
+    if(!mainPos) return alert("メイン守備を選択してください");
 
     numInput = numInput.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/[^0-9]/g, '');
     const numberToSave = numInput === "" ? "無" : String(numInput);
 
-    // 重複チェック（現役のみ）
     if (numberToSave !== "無") {
         const isDuplicate = players.some(p => (p.status || "現役") === "現役" && String(p.number) === numberToSave);
         if (isDuplicate) return alert(`エラー：背番号「${numberToSave}」は既に現役選手が使用中です。`);
     }
 
-    // 同時登録でも絶対に重複しない強化版ID
     const uniqueId = Date.now().toString() + Math.random().toString(36).substring(2, 9);
 
     players.push({
         id: uniqueId,
         number: numberToSave,
         pastNumbers: [],
-        name: name,
-        furigana: furigana, 
+        name: fullName,      
+        furigana: furigana,  // 🌟 半角スペースで結合されたフリガナを保存
         side: document.getElementById('p-side').value,
         mainPos: mainPos,
         subPos: Array.from(document.querySelectorAll('input[name="sub-pos"]:checked')).map(cb => cb.value),
-        status: "現役", // 🌟 初期値は現役
+        status: "現役", 
         stats: { avg: ".000", hits: 0, ab: 0 }
     });
     
@@ -548,7 +564,6 @@ function showPlayerDetail(id) {
     const p = players.find(player => String(player.id) === String(id));
     if(!p) return;
     currentEditingPlayerId = String(id);
-
     const furiHtml = p.furigana ? `<p class="player-furigana">${p.furigana}</p>` : '';
     const statusText = p.status || '現役';
 
@@ -556,14 +571,13 @@ function showPlayerDetail(id) {
     document.getElementById('modal-body').innerHTML = `
         <div class="view-content">
             ${furiHtml}
-            <p><strong>氏名:</strong> ${p.name} <span style="color:#666; font-size:0.85rem;">(${statusText})</span></p>
+            <p><strong>氏名:</strong> ${p.name}</p>
             <p><strong>背番号:</strong> ${p.number}</p>
             <p><strong>投打:</strong> ${p.side}</p>
             <p><strong>メイン守備:</strong> ${p.mainPos}</p>
             <p><strong>サブ守備:</strong> ${p.subPos && p.subPos.length > 0 ? p.subPos.join(', ') : "なし"}</p>
             <div class="modal-btns">
                 <button class="btn-edit-mode admin-only" onclick="showEditForm('${id}')">編集・ステータス変更</button>
-                <button class="btn-delete admin-only" onclick="deletePlayer('${id}')">完全に削除する</button>
             </div>
         </div>
     `;
@@ -577,6 +591,15 @@ function showEditForm(id) {
         <label class="checkbox-item"><input type="checkbox" name="edit-sub-pos" value="${pos}" ${p.subPos && p.subPos.includes(pos) ? "checked" : ""}> ${pos}</label>
     `).join('');
     const suggestedNum = getSuggestedAssistantNumber();
+
+    const nameParts = p.name.split(" ");
+    const lastName = nameParts[0] || "";
+    const firstName = nameParts.slice(1).join(" ") || "";
+
+    const furiParts = (p.furigana || "").split(/[ 　]+/);
+    const furiLast = furiParts[0] || "";
+    const furiFirst = furiParts.slice(1).join(" ") || "";
+
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
             <label>ステータス:</label>
@@ -585,10 +608,21 @@ function showEditForm(id) {
                 <option value="活動休止中" ${p.status === '活動休止中' ? 'selected' : ''}>活動休止中</option>
                 <option value="OB・OG" ${p.status === 'OB・OG' ? 'selected' : ''}>OB・OG</option>
             </select>
-            <label>氏名:</label> <input type="text" id="edit-name" value="${p.name}">
-            <label>フリガナ:</label> <input type="text" id="edit-furigana" value="${p.furigana || ''}" placeholder="フリガナ (任意)" onblur="this.value = convertToKatakana(this.value)">
+
+            <label>氏名:</label> 
+            <div class="flex-gap-8">
+                <input type="text" id="edit-name-last" class="flex-1" value="${lastName}" placeholder="苗字">
+                <input type="text" id="edit-name-first" class="flex-1" value="${firstName}" placeholder="名前">
+            </div>
+
+            <label>フリガナ:</label> 
+            <div class="flex-gap-8">
+                <input type="text" id="edit-furigana-last" class="flex-1" value="${furiLast}" placeholder="フリガナ(苗字)" onblur="this.value = convertToKatakana(this.value)">
+                <input type="text" id="edit-furigana-first" class="flex-1" value="${furiFirst}" placeholder="フリガナ(名前)" onblur="this.value = convertToKatakana(this.value)">
+            </div>
+
             <label>背番号:</label> 
-            <input type="text" inputmode="numeric" id="edit-number" value="${p.number === '無' ? '' : p.number}" placeholder="助っ人候補: ${suggestedNum}" onblur="formatNumberInput(this)">
+            <input type="text" inputmode="numeric" id="edit-number" value="${p.number === '無' ? '' : p.number}" placeholder="助っ人候補: ${suggestedNum}" oninput="formatNumberInput(this)">
             <label>投打:</label>
             <select id="edit-side">
                 <option value="右投右打" ${p.side==='右投右打'?'selected':''}>右投右打</option>
@@ -600,7 +634,17 @@ function showEditForm(id) {
             <select id="edit-main-pos">${positionOptions.map(pos => `<option value="${pos}" ${p.mainPos===pos?'selected':''}>${pos}</option>`).join('')}</select>
             <label>サブ守備:</label>
             <div class="checkbox-grid">${subCheckboxesHtml}</div>
-            <div class="modal-btns"><button class="btn-save admin-only" onclick="updatePlayer()">保存する</button></div>
+            
+            <div class="modal-btns mt-10">
+                <button class="btn-save admin-only" onclick="updatePlayer()">保存する</button>
+            </div>
+
+            <hr class="modal-hr" style="margin: 25px 0 15px 0;">
+            <div style="text-align: center;">
+                <p class="help-text" style="color: var(--danger-color); font-weight: bold; margin-bottom: 5px;">⚠️ 削除の前にご確認ください</p>
+                <p class="help-text-small mb-10">名前や記録を一切残したくない場合のみ使用してください。通常はステータス「OB・OG」への変更を推奨しています。</p>
+                <button class="btn-delete w-100 admin-only" style="padding: 10px;" onclick="deletePlayer('${id}')">この選手を完全に削除する</button>
+            </div>
         </div>
     `;
 }
@@ -615,7 +659,6 @@ function updatePlayer() {
     numInput = numInput.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/[^0-9]/g, '');
     const numberToSave = numInput === "" ? "無" : String(numInput);
 
-    // 現役に復帰（または変更）する場合の他選手との重複チェック
     if (newStatus === "現役" && numberToSave !== "無") {
         const isDuplicate = players.some(player => {
             if (String(player.id) === String(currentEditingPlayerId)) return false; 
@@ -629,9 +672,24 @@ function updatePlayer() {
         if (!p.pastNumbers.includes(String(p.number))) p.pastNumbers.push(String(p.number));
     }
 
+    const lastName = document.getElementById('edit-name-last').value.trim();
+    const firstName = document.getElementById('edit-name-first').value.trim();
+    if(!lastName || !firstName) return alert("苗字と名前を両方入力してください");
+    p.name = lastName + " " + firstName;
+
+    // 🌟 フリガナの取得と結合
+    const furiLast = document.getElementById('edit-furigana-last').value.trim();
+    const furiFirst = document.getElementById('edit-furigana-first').value.trim();
+    let furigana = "";
+    if (furiLast || furiFirst) {
+        furigana = (furiLast + " " + furiFirst).trim();
+        if (!/^[ァ-ヶー・\s　]+$/.test(furigana)) {
+            return alert("エラー：フリガナは「全角カタカナ」のみ入力してください。");
+        }
+    }
+    p.furigana = furigana;
+
     p.status = newStatus;
-    p.name = document.getElementById('edit-name').value;
-    p.furigana = document.getElementById('edit-furigana').value; 
     p.number = numberToSave;
     p.side = document.getElementById('edit-side').value;
     p.mainPos = document.getElementById('edit-main-pos').value;
@@ -643,11 +701,21 @@ function updatePlayer() {
 
 function deletePlayer(id) {
     if (!checkAdmin()) return;
-    if(confirm("本当にこの選手を削除しますか？\n（※OBなどに残したい場合はステータス変更を活用してください）")) {
-        players = players.filter(p => String(p.id) !== String(id));
-        saveAndRefreshPlayers();
-        closeModal();
+    
+    // 🌟 警告メッセージ1 (キャンセルならここで処理終了)
+    if(!confirm("削除して良いですか？了解は取れていますか？\n（※通常はステータス「活動休止中」および「OB・OG」への変更を推奨しています）")) {
+        return;
     }
+
+    // 削除の実行
+    players = players.filter(p => String(p.id) !== String(id));
+    saveAndRefreshPlayers();
+    
+    // 🌟 警告メッセージ2（事後通知）
+    alert("削除しました。可能な限り、本人にお伝えください。");
+    
+    // モーダルを閉じてチーム情報画面へ戻る
+    closeModal();
 }
 
 function renderPlayerList() {
@@ -661,24 +729,23 @@ function renderPlayerList() {
         const group = players.filter(p => (p.status || "現役") === status);
         if (group.length > 0) {
             html += `<tr class="status-header"><td colspan="4">${status}</td></tr>`;
-            
             const sortedGroup = group.sort((a, b) => {
                 const numA = (a.number === "無" || a.number === "") ? Infinity : parseFloat(a.number);
                 const numB = (b.number === "無" || b.number === "") ? Infinity : parseFloat(b.number);
                 return numA - numB;
             });
-
             sortedGroup.forEach(p => {
-                html += `<tr>
-                    <td>${p.number}</td>
-                    <td><span class="name-link" onclick="showPlayerDetail('${p.id}')">${p.name}</span></td>
-                    <td>${p.side}</td>
-                    <td>${p.mainPos}</td>
-                </tr>`;
+                html += `<tr><td>${p.number}</td><td><span class="name-link" onclick="showPlayerDetail('${p.id}')">${p.name}</span></td><td>${p.side}</td><td>${p.mainPos}</td></tr>`;
             });
         }
     });
     body.innerHTML = html;
+
+    // 🌟 追加：監督・主将の入力候補（datalist）を登録選手一覧で更新
+    const datalist = document.getElementById('team-members-list');
+    if (datalist) {
+        datalist.innerHTML = players.map(p => `<option value="${p.name}"></option>`).join('');
+    }
 }
 
 /**
@@ -696,13 +763,16 @@ function toggleDeleteMode() {
 
 function showAddGameModal(gameId = null) {
     const isEdit = gameId !== null;
-    const allPlayerIds = players.map(p => String(p.id));
+    
+    // 🌟 変更：現役選手だけを抽出してデフォルト参加者にする
+    const activePlayerIds = players.filter(p => (p.status || "現役") === "現役").map(p => String(p.id));
+
     const g = isEdit ? games.find(game => game.id === gameId) : {
         date: new Date().toISOString().split('T')[0],
         opponent: "", location: "", weather: "晴れ", side: "先攻", 
-        participants: allPlayerIds
+        participants: activePlayerIds // 🌟 ここを適用
     };
-    tempParticipants = g.participants ? [...g.participants] : allPlayerIds;
+    tempParticipants = g.participants ? [...g.participants] : activePlayerIds;
 
     document.getElementById('modal-title').innerText = isEdit ? "試合情報の編集" : "新規試合登録";
     document.getElementById('modal-body').innerHTML = `
@@ -722,7 +792,7 @@ function showAddGameModal(gameId = null) {
                 <option value="後攻" ${g.side==='後攻'?'selected':''}>後攻</option>
             </select>
             <label class="modal-section-label">当日の参加者:</label>
-            <p class="help-text mb-10">※デフォルトで全選手が登録されています。欠席者を「✖」で外してください。</p>
+            <p class="help-text mb-10">※デフォルトで現役選手が登録されています。欠席者を「✖」で外してください。</p>
             <div class="flex-gap-8">
                 <select id="g-participant-select" class="flex-1"></select>
                 <button type="button" class="btn-small-action btn-small-gray admin-only" onclick="addParticipant()">追加</button>
@@ -783,8 +853,7 @@ function processGame(gameId) {
 
     const gameData = {
         id: gameId || Date.now(),
-        date: date,
-        opponent: opponent,
+        date: date, opponent: opponent,
         location: document.getElementById('g-location').value || "未定",
         weather: document.getElementById('g-weather').value,
         side: document.getElementById('g-side').value,
@@ -806,19 +875,43 @@ function processGame(gameId) {
     closeModal();
 }
 
+// 🌟 試合一覧・スコア入力の年フィルター処理
+function changeGameYear(year) {
+    currentGameYear = year;
+    renderGameList();
+}
+
 function renderGameList() {
     const container = document.getElementById('game-list-container');
     const scoreContainer = document.getElementById('score-game-list-container');
     if(!container) return;
     
-    const emptyMsg = '<p class="empty-message">試合が登録されていません</p>';
-    if(games.length === 0) {
+    // 全試合から年のリストを取得
+    const years = [...new Set(games.map(g => g.date.substring(0, 4)))].sort((a, b) => b - a);
+
+    // フィルターの選択肢を更新
+    const optionsHtml = `<option value="all" ${currentGameYear==='all'?'selected':''}>通算</option>` +
+        years.map(y => `<option value="${y}" ${currentGameYear===String(y)?'selected':''}>${y}年</option>`).join('');
+
+    const gSelect = document.getElementById('game-year-select');
+    if(gSelect) gSelect.innerHTML = optionsHtml;
+    const sSelect = document.getElementById('score-year-select');
+    if(sSelect) sSelect.innerHTML = optionsHtml;
+
+    // 表示年で絞り込み
+    const targetGames = games.filter(g => {
+        if (currentGameYear === "all") return true;
+        return g.date.substring(0, 4) === currentGameYear;
+    });
+
+    const emptyMsg = '<p class="empty-message">対象の試合がありません</p>';
+    if(targetGames.length === 0) {
         container.innerHTML = emptyMsg;
         if(scoreContainer) scoreContainer.innerHTML = emptyMsg;
         return;
     }
 
-    const sortedGames = [...games].sort((a, b) => new Date(b.date) - new Date(a.date));
+    const sortedGames = [...targetGames].sort((a, b) => new Date(b.date) - new Date(a.date));
 
     container.innerHTML = sortedGames.map(g => {
         const resultText = g.isFinished ? (g.score.us > g.score.them ? ' (勝)' : g.score.us < g.score.them ? ' (敗)' : ' (分)') : ' (未完了)';
@@ -869,11 +962,9 @@ function showLineupModal(gameId) {
     if (players.length === 0) return alert("先に選手登録を行ってください。");
     currentGameForScore = games.find(game => game.id === gameId);
     tempLineup = JSON.parse(JSON.stringify(currentGameForScore.lineup || []));
-
     if (tempLineup.length === 0) {
         for(let i=0; i<9; i++) tempLineup.push({ playerId: "", position: "", results: [] });
     }
-
     document.getElementById('modal-title').innerText = `スタメン設定 (vs ${currentGameForScore.opponent})`;
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
@@ -891,11 +982,9 @@ function showLineupModal(gameId) {
 function renderLineupRows() {
     const wrapper = document.getElementById('lineup-wrapper');
     wrapper.innerHTML = "";
-
     tempLineup.forEach((item, index) => {
         const row = document.createElement('div');
         row.className = "lineup-row";
-        
         row.innerHTML = `
             <span class="lineup-order">${index + 1}.</span>
             <select class="lineup-player-select" onchange="updateTempLineup(${index}, 'playerId', this.value)">
@@ -923,18 +1012,10 @@ function renderLineupRows() {
     });
 }
 
-function updateTempLineup(index, key, value) {
-    tempLineup[index][key] = value;
-    if (key === 'playerId' || key === 'position') renderLineupRows();
-}
-function addLineupRow() {
-    tempLineup.push({ playerId: "", position: "", results: [] });
-    renderLineupRows();
-}
-function removeLineupRow(index) {
-    tempLineup.splice(index, 1);
-    renderLineupRows();
-}
+function updateTempLineup(index, key, value) { tempLineup[index][key] = value; if (key === 'playerId' || key === 'position') renderLineupRows(); }
+function addLineupRow() { tempLineup.push({ playerId: "", position: "", results: [] }); renderLineupRows(); }
+function removeLineupRow(index) { tempLineup.splice(index, 1); renderLineupRows(); }
+
 function saveLineup() {
     if (!checkAdmin()) return;
     const filteredLineup = tempLineup.filter(item => item.playerId !== "");
@@ -949,7 +1030,6 @@ function showPitcherModal(gameId) {
     if (!currentGameForScore.pitchers) currentGameForScore.pitchers = [];
     tempPitchers = JSON.parse(JSON.stringify(currentGameForScore.pitchers));
     if (tempPitchers.length === 0) tempPitchers.push({ playerId: "", innings: "", outs: "0", er: "", so: "", bb: "" });
-
     document.getElementById('modal-title').innerText = `投手成績 (vs ${currentGameForScore.opponent})`;
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
@@ -1195,12 +1275,7 @@ function renderScoreBoardTable() {
 }
 
 function updateInningScore(index, team, value) {
-    if (value !== "" && parseInt(value) < 0) {
-        value = "";
-        currentGameForScore.innings[index][team] = value;
-        renderScoreBoardTable(); 
-        return;
-    }
+    if (value !== "" && parseInt(value) < 0) { value = ""; currentGameForScore.innings[index][team] = value; renderScoreBoardTable(); return; }
     currentGameForScore.innings[index][team] = value;
     let totalUs = currentGameForScore.innings.reduce((sum, inn) => sum + (parseInt(inn.us) || 0), 0);
     let totalThem = currentGameForScore.innings.reduce((sum, inn) => sum + (parseInt(inn.them) || 0), 0);
@@ -1248,7 +1323,7 @@ async function saveAndRefreshGames() {
 }
 
 /**
- * 🌟 バックアップ・データ管理機能
+ * 🌟 バックアップ・データ管理
  */
 function setupBackupUI() {
     const teamPage = document.getElementById('team-page');
@@ -1257,7 +1332,7 @@ function setupBackupUI() {
     backupDiv.className = 'card mt-20';
     backupDiv.innerHTML = `
         <h3>データ管理（クラウド連携済）</h3>
-        <p class="help-text">データは自動的にクラウドに保存されています。過去にJSON形式で書き出したデータをこのチームに流し込む場合は「復元」を押してください。</p>
+        <p class="help-text">データは自動的にクラウドに保存されています。過去にJSON形式で書き出したデータを流し込む場合は「復元」を押してください。</p>
         <div class="flex-gap-8 mt-15">
             <button class="btn-small-action btn-small-blue flex-1 p-10 admin-only" onclick="exportData()">📥 今のデータを書き出す</button>
             <label class="btn-import-label flex-1 p-10 admin-only">
@@ -1320,9 +1395,8 @@ function showHelpModal(pageId) {
             content: `
                 <div class="help-content-modal">
                     <p><strong>【はじめての方（新規登録）】</strong></p>
-                    <p>1. お使いの「メールアドレス」と「お好きなパスワード」を入力します。</p>
-                    <p>2. 「ログイン / 新規登録」ボタンを押します。</p>
-                    <p>3. 確認画面が出たら「OK」を押し、ご自身の名前を入力して登録完了です！</p>
+                    <p>1. お使いの「メールアドレス」と「パスワード」を入力します。</p>
+                    <p>2. 「登録して始める」ボタンを押します。</p>
                     <hr class="modal-hr">
                     <p><strong>【すでに登録済みの方（ログイン）】</strong></p>
                     <p>登録した「メールアドレス」と「パスワード」を入力し、ログインしてください。</p>
@@ -1361,7 +1435,7 @@ function showHelpModal(pageId) {
             content: `
                 <div class="help-content-modal">
                     <p>・「終了済」になった試合のデータから、<strong>個人の打撃成績と投手成績を自動で計算</strong>して表示します。</p>
-                    <p>・「表示シーズン」のプルダウンで年度ごとの成績に絞り込めます。</p>
+                    <p>・「表示年」のプルダウンで年ごとの成績に絞り込めます。</p>
                 </div>`
         }
     };
@@ -1392,8 +1466,9 @@ function updateTeamRecord() {
         };
         el.parentNode.insertBefore(selectEl, el);
     }
+    // 🌟「年度」から「年」に変更
     selectEl.innerHTML = `<option value="all" ${currentRecordYear==='all'?'selected':''}>通算成績</option>` +
-        years.map(y => `<option value="${y}" ${currentRecordYear===String(y)?'selected':''}>${y}年度</option>`).join('');
+        years.map(y => `<option value="${y}" ${currentRecordYear===String(y)?'selected':''}>${y}年</option>`).join('');
 
     let wins = 0, losses = 0, draws = 0;
     finishedGames.forEach(g => {
@@ -1416,12 +1491,13 @@ function renderStatsPage() {
     const finishedGames = games.filter(g => g.isFinished);
     const years = [...new Set(finishedGames.map(g => g.date.substring(0, 4)))].sort((a, b) => b - a);
 
-    let yearOptionsHtml = `<option value="all" ${currentStatsYear === 'all' ? 'selected' : ''}>通算成績</option>`;
-    years.forEach(y => { yearOptionsHtml += `<option value="${y}" ${currentStatsYear === String(y) ? 'selected' : ''}>${y}年度</option>`; });
+    let yearOptionsHtml = `<option value="all" ${currentStatsYear === 'all' ? 'selected' : ''}>通算</option>`;
+    // 🌟「年度」から「年」に変更
+    years.forEach(y => { yearOptionsHtml += `<option value="${y}" ${currentStatsYear === String(y) ? 'selected' : ''}>${y}年</option>`; });
 
     const filterHtml = `
         <div class="filter-container">
-            <label class="filter-label">表示シーズン:</label>
+            <label class="filter-label">表示年:</label>
             <select id="stats-year-select" class="filter-select" onchange="changeStatsYear(this.value)">${yearOptionsHtml}</select>
         </div>
     `;
