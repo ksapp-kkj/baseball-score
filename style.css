@@ -820,3 +820,15 @@ th {
 #login-screen h2 {
     justify-content: center;
 }
+
+/* 🌟 選手ステータスの区切りヘッダー用 */
+.status-header {
+    background-color: var(--grass-green) !important;
+    color: white;
+    font-weight: bold;
+}
+.status-header td {
+    padding: 8px 15px;
+    text-align: left !important;
+    font-size: 0.9rem;
+}
