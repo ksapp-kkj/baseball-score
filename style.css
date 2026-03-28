@@ -552,15 +552,6 @@ th {
     font-size: 0.95rem;
 }
 
-.help-trigger {
-    cursor: pointer;
-    font-size: 1.3rem; 
-    vertical-align: middle;
-    margin-left: 5px;
-    display: inline-block;
-    text-align: center;
-}
-
 .help-content-modal p {
     font-size: 0.85rem;
     color: #555;
@@ -821,6 +812,28 @@ th {
     justify-content: center;
 }
 
+/* 🌟 使い方ボタンのデザイン */
+.help-trigger {
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: normal;
+    background-color: white;
+    color: var(--grass-green);
+    border: 1px solid var(--grass-green);
+    padding: 4px 10px;
+    border-radius: 16px;
+    margin-left: 12px;
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    transition: all 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.help-trigger:hover {
+    background-color: var(--grass-green);
+    color: white;
+}
+
 /* 🌟 選手ステータスの区切りヘッダー用 */
 .status-header {
     background-color: var(--grass-green) !important;
@@ -831,4 +844,10 @@ th {
     padding: 8px 15px;
     text-align: left !important;
     font-size: 0.9rem;
+}
+
+/* 🌟 チェックボックスの表示を復活させる */
+input[type="checkbox"] {
+    appearance: auto;
+    -webkit-appearance: auto;
 }
