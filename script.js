@@ -13,7 +13,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const auth = firebase.auth();
-auth.languageCode = 'ja'; // 日本語メール設定
+auth.languageCode = 'ja';
 
 /**
  * 🌟 アプリ全体の状態管理
@@ -64,19 +64,17 @@ function showLoginForm() {
 }
 
 /**
- * 🌟 Firebase 認証（ログイン・ログアウト・アカウント関連）
+ * 🌟 Firebase 認証
  */
 auth.onAuthStateChanged(async (user) => {
     if (user) {
         currentUser = user;
-        
         const uDoc = await db.collection("users").doc(user.uid).get();
         if (uDoc.exists && uDoc.data().name) {
             document.getElementById('edit-username-input').value = uDoc.data().name;
         } else {
             document.getElementById('edit-username-input').value = "";
         }
-        
         showScreen('mypage-screen');
         loadUserTeams(); 
     } else {
@@ -90,9 +88,7 @@ auth.onAuthStateChanged(async (user) => {
 async function loginAccount() {
     const email = document.getElementById('login-email-input').value;
     const password = document.getElementById('login-password-input').value;
-    
     if(!email || !password) return alert("メールアドレスとパスワードを入力してください");
-    
     try {
         await auth.signInWithEmailAndPassword(email, password);
     } catch(error) {
@@ -117,13 +113,10 @@ async function registerAccount() {
     try {
         const userCred = await auth.createUserWithEmailAndPassword(email, password);
         await db.collection("users").doc(userCred.user.uid).set({ email: email, name: userName }, { merge: true });
-        
         alert("新規登録が完了しました！");
-        
         document.getElementById('register-email-input').value = "";
         document.getElementById('register-password-input').value = "";
         document.getElementById('register-name-input').value = "";
-        
     } catch(error) {
         if (error.code === 'auth/email-already-in-use') {
             alert("このメールアドレスは既に登録されています。「ログイン画面に戻る」を押してログインしてください。");
@@ -146,17 +139,13 @@ async function resetPassword() {
 }
 
 function logout() {
-    if(confirm("ログアウトしますか？")) {
-        auth.signOut();
-    }
+    if(confirm("ログアウトしますか？")) auth.signOut();
 }
 
 async function deleteAccount() {
     if (!confirm("⚠️本当にアカウントを完全に削除しますか？\nこの操作は取り消せません。\n（※チームの試合データ自体は消えませんが、あなたのユーザー情報は完全に削除されます）")) return;
-
     try {
         const uid = currentUser.uid;
-
         const teamsSnapshot = await db.collection("teams").where("members", "array-contains", uid).get();
         const batch = db.batch(); 
         teamsSnapshot.forEach(doc => {
@@ -166,10 +155,8 @@ async function deleteAccount() {
             });
         });
         await batch.commit(); 
-
         await db.collection("users").doc(uid).delete();
         await currentUser.delete();
-        
         alert("アカウントと関連データを完全に削除しました。ご利用ありがとうございました。");
     } catch (error) {
         if (error.code === 'auth/requires-recent-login') {
@@ -186,9 +173,7 @@ async function updateUserName() {
     try {
         await db.collection("users").doc(currentUser.uid).update({ name: newName });
         alert("表示名を更新しました！");
-    } catch (e) {
-        alert("更新に失敗しました: " + e.message);
-    }
+    } catch (e) { alert("更新に失敗しました: " + e.message); }
 }
 
 function checkAdmin() {
@@ -200,35 +185,27 @@ function checkAdmin() {
 }
 
 /**
- * 🌟 マイページ（チーム管理）機能
+ * 🌟 マイページ（チーム管理）
  */
 async function loadUserTeams() {
     const listEl = document.getElementById('user-team-list');
     listEl.innerHTML = '<p class="empty-message">読み込み中...</p>';
-    
     try {
         const snapshot = await db.collection("teams").where("members", "array-contains", currentUser.uid).get();
-        
         if (snapshot.empty) {
             listEl.innerHTML = '<p class="empty-message">所属しているチームがありません。<br>「新しいチームを作成する」か、「招待ID」を入力してください。</p>';
             return;
         }
-        
         let html = '';
         snapshot.forEach(doc => {
             const data = doc.data();
             const admins = data.admins || [];
-            
             const ownerUid = data.owner || admins[0];
             const isGM = (currentUser.uid === ownerUid);
             const isAdmin = admins.includes(currentUser.uid);
-            
             let badge = '';
-            if (isGM) {
-                badge = '<span class="admin-badge bg-danger">GM</span>';
-            } else if (isAdmin) {
-                badge = '<span class="admin-badge admin-badge-orange">管理者</span>';
-            }
+            if (isGM) { badge = '<span class="admin-badge bg-danger">GM</span>'; } 
+            else if (isAdmin) { badge = '<span class="admin-badge admin-badge-orange">管理者</span>'; }
             
             html += `
                 <div class="team-item-wrapper">
@@ -238,7 +215,6 @@ async function loadUserTeams() {
             `;
         });
         listEl.innerHTML = html;
-        
     } catch(e) {
         listEl.innerHTML = '<p class="empty-message" style="color:red;">読み込みエラーが発生しました。</p>';
         console.error(e);
@@ -247,38 +223,26 @@ async function loadUserTeams() {
 
 async function leaveTeam(teamId, teamName) {
     if(!confirm(`本当に「${teamName}」から退出しますか？\n退出すると、再度招待IDを入力しない限りこのチームには戻れません。`)) return;
-
     try {
         const docRef = db.collection("teams").doc(teamId);
         const docSnap = await docRef.get();
-        
         if (docSnap.exists) {
             const data = docSnap.data();
             const admins = data.admins || [];
             const ownerUid = data.owner || admins[0]; 
-            
             if (currentUser.uid === ownerUid) {
                 alert("【退出できません】\nあなたはチームの「GM」です。\nGMが退出することはできません。");
                 return;
             }
-            
             await docRef.update({
                 members: firebase.firestore.FieldValue.arrayRemove(currentUser.uid),
                 admins: firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
             });
-            
             alert("チームから退出しました。");
-            
-            if (currentTeamId === teamId) {
-                backToMyPage();
-            } else {
-                loadUserTeams(); 
-            }
+            if (currentTeamId === teamId) backToMyPage();
+            else loadUserTeams(); 
         }
-    } catch(e) {
-        alert("退出処理中にエラーが発生しました。: " + e.message);
-        console.error(e);
-    }
+    } catch(e) { alert("退出処理中にエラー: " + e.message); }
 }
 
 function showCreateTeamModal() {
@@ -286,9 +250,7 @@ function showCreateTeamModal() {
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
             <input type="text" id="new-team-name" class="large-select w-100" placeholder="チーム名を入力">
-            <div class="modal-btns mt-20">
-                <button class="btn-save" onclick="createNewTeam()">作成する</button>
-            </div>
+            <div class="modal-btns mt-20"><button class="btn-save" onclick="createNewTeam()">作成する</button></div>
         </div>
     `;
     document.getElementById('modal-overlay').style.display = 'flex';
@@ -297,75 +259,53 @@ function showCreateTeamModal() {
 async function createNewTeam() {
     const teamName = document.getElementById('new-team-name').value;
     if (!teamName) return alert("チーム名を入力してください");
-    
     try {
         await db.collection("teams").add({
             team_name: teamName,
-            manager_name: "",
-            captain_name: "",
+            manager_name: "", captain_name: "",
             owner: currentUser.uid, 
             members: [currentUser.uid], 
             admins: [currentUser.uid],  
-            players: [],
-            games: []
+            players: [], games: []
         });
         closeModal();
         loadUserTeams(); 
-    } catch (e) {
-        alert("作成エラー: " + e.message);
-    }
+    } catch (e) { alert("作成エラー: " + e.message); }
 }
 
 async function joinTeam() {
     const teamIdInput = document.getElementById('join-team-id');
     const teamId = teamIdInput.value.trim();
     if (!teamId) return alert("招待IDを入力してください");
-
     try {
         const docRef = db.collection("teams").doc(teamId);
         const doc = await docRef.get();
-
-        if (!doc.exists) {
-            return alert("入力されたIDのチームが見つかりません。IDが間違っていないか確認してください。");
-        }
-
-        await docRef.update({
-            members: firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
-        });
-
+        if (!doc.exists) return alert("入力されたIDのチームが見つかりません。");
+        await docRef.update({ members: firebase.firestore.FieldValue.arrayUnion(currentUser.uid) });
         alert("チームに参加しました！");
         teamIdInput.value = ""; 
         loadUserTeams(); 
-    } catch (error) {
-        alert("参加処理中にエラーが発生しました。");
-        console.error(error);
-    }
+    } catch (error) { alert("参加処理中にエラーが発生しました。"); }
 }
 
 function copyTeamId() {
     if (!currentTeamId) return;
     navigator.clipboard.writeText(currentTeamId).then(() => {
-        alert("招待ID「" + currentTeamId + "」をコピーしました！\nLINE等でメンバーに共有して、チームに参加してもらってください。");
-    }).catch(err => {
-        alert("コピーに失敗しました。このIDを手動でコピーしてください: " + currentTeamId);
-    });
+        alert("招待ID「" + currentTeamId + "」をコピーしました！");
+    }).catch(err => { alert("コピーに失敗しました: " + currentTeamId); });
 }
 
 async function selectTeam(teamId, teamName) {
     currentTeamId = teamId;
     document.getElementById('current-team-display').innerText = teamName;
     document.getElementById('team-id-display').innerHTML = `ID: ${teamId}<br><span class="copy-text">(タップでコピー)</span>`;
-    
     try {
         const doc = await db.collection("teams").doc(teamId).get();
         const data = doc.data();
-        
         currentTeamAdmins = data.admins || [];
-        
         const appScreen = document.getElementById('main-app-screen');
         const modalOverlay = document.getElementById('modal-overlay');
         const manageBtn = document.getElementById('manage-members-btn');
-        
         if(currentTeamAdmins.includes(currentUser.uid)){
             appScreen.classList.remove('viewer-mode');
             modalOverlay.classList.remove('viewer-mode');
@@ -375,199 +315,123 @@ async function selectTeam(teamId, teamName) {
             modalOverlay.classList.add('viewer-mode');
             if(manageBtn) manageBtn.classList.add('hidden');
         }
-
         players = data.players || [];
         games = data.games || [];
-        
         document.getElementById('team-name-input').value = data.team_name || teamName;
         document.getElementById('manager-name-input').value = data.manager_name || "";
         document.getElementById('captain-name-input').value = data.captain_name || "";
-        
         renderPlayerList();
         renderGameList();
         updateTeamRecord();
         renderStatsPage();
-        
         showScreen('main-app-screen');
-    } catch(e) {
-        alert("チームデータの読み込みに失敗しました");
-        console.error(e);
-    }
+    } catch(e) { alert("チームデータの読み込みに失敗しました"); }
 }
 
 function backToMyPage() {
     currentTeamId = null;
     currentTeamAdmins = [];
-    players = [];
-    games = [];
+    players = []; games = [];
     showScreen('mypage-screen');
     loadUserTeams();
 }
 
 /**
- * 🌟 メンバー・権限管理機能（GM移管・削除廃止・5人制限）
+ * 🌟 メンバー・権限管理
  */
 async function showMemberManagementModal() {
     if (!currentTeamId) return;
     document.getElementById('modal-title').innerText = "メンバー情報取得中...";
     document.getElementById('modal-overlay').style.display = 'flex';
-
     try {
         const doc = await db.collection("teams").doc(currentTeamId).get();
         const teamData = doc.data();
         const members = teamData.members || [];
         const admins = teamData.admins || [];
-        
         const ownerUid = teamData.owner || admins[0];
         const iAmGM = (currentUser.uid === ownerUid); 
-
         let memberListHtml = '';
-        
         for (let uid of members) {
             let displayName = "未設定"; 
             try {
                 const uDoc = await db.collection("users").doc(uid).get();
-                if(uDoc.exists) {
-                    const d = uDoc.data();
-                    displayName = (d.name && d.name !== "") ? d.name : "未設定";
-                }
+                if(uDoc.exists && uDoc.data().name) displayName = uDoc.data().name;
             } catch(e){}
-
             const isThisUserGM = (uid === ownerUid); 
             const isAdmin = admins.includes(uid);
             const nameClass = displayName === "未設定" ? "text-unregistered" : "";
-
             let actionHtml = '';
             let badgeHtml = '';
-
-            if (isThisUserGM) {
-                badgeHtml = '<span class="admin-badge bg-danger badge-gm">GM</span>';
-            } else if (isAdmin) {
-                badgeHtml = '<span class="admin-badge admin-badge-orange">管理者</span>';
-            } else {
-                badgeHtml = '<span class="viewer-badge">閲覧のみ</span>';
-            }
+            if (isThisUserGM) badgeHtml = '<span class="admin-badge bg-danger badge-gm">GM</span>';
+            else if (isAdmin) badgeHtml = '<span class="admin-badge admin-badge-orange">管理者</span>';
+            else badgeHtml = '<span class="viewer-badge">閲覧のみ</span>';
 
             if (isThisUserGM) {
                 actionHtml = `<span class="admin-note">※最高権限</span>`;
             } else {
-                if (isAdmin) {
-                    actionHtml += `<button class="btn-small-action btn-small-gray" onclick="toggleAdmin('${uid}', false)">管理者を外す</button>`;
-                } else {
-                    actionHtml += `<button class="btn-small-action btn-small-blue" onclick="toggleAdmin('${uid}', true)">管理者にする</button>`;
-                }
-                
-                if (iAmGM) {
-                    actionHtml += `<button class="btn-small-action bg-danger ml-8" onclick="transferGM('${uid}', '${displayName}')">GMを譲渡</button>`;
-                }
+                if (isAdmin) actionHtml += `<button class="btn-small-action btn-small-gray" onclick="toggleAdmin('${uid}', false)">管理者を外す</button>`;
+                else actionHtml += `<button class="btn-small-action btn-small-blue" onclick="toggleAdmin('${uid}', true)">管理者にする</button>`;
+                if (iAmGM) actionHtml += `<button class="btn-small-action bg-danger ml-8" onclick="transferGM('${uid}', '${displayName}')">GMを譲渡</button>`;
             }
-
             memberListHtml += `
                 <div class="member-list-item">
-                    <div>
-                        <div class="member-name-text ${nameClass}">${displayName}</div>
-                        ${badgeHtml}
-                    </div>
-                    <div class="flex-gap-8">
-                        ${actionHtml}
-                    </div>
-                </div>
-            `;
+                    <div><div class="member-name-text ${nameClass}">${displayName}</div>${badgeHtml}</div>
+                    <div class="flex-gap-8">${actionHtml}</div>
+                </div>`;
         }
-
-        document.getElementById('modal-title').innerText = "チームメンバーと権限の管理";
+        document.getElementById('modal-title').innerText = "チームメンバーと権限管理";
         document.getElementById('modal-body').innerHTML = `
             <div class="edit-form">
                 <p class="help-text mb-15">管理者はGMを含めて【最大5人】までです。GMは任意のメンバーに権限を譲渡できます。</p>
-                <div class="member-scroll-container">
-                    ${memberListHtml}
-                </div>
-                <div class="modal-btns">
-                    <button class="btn-save" onclick="closeModal()">閉じる</button>
-                </div>
-            </div>
-        `;
-    } catch(e) {
-        alert("メンバー情報の取得に失敗しました。");
-        closeModal();
-    }
+                <div class="member-scroll-container">${memberListHtml}</div>
+                <div class="modal-btns"><button class="btn-save" onclick="closeModal()">閉じる</button></div>
+            </div>`;
+    } catch(e) { alert("メンバー情報の取得に失敗しました。"); closeModal(); }
 }
 
 async function toggleAdmin(uid, makeAdmin) {
     try {
         const docRef = db.collection("teams").doc(currentTeamId);
-        
         if (makeAdmin) {
             const docSnap = await docRef.get();
             const currentAdmins = docSnap.data().admins || [];
-            
-            if (currentAdmins.length >= 5) {
-                alert("【上限エラー】\n管理者はGMを含めて最大5人までです。これ以上追加できません。");
-                return;
-            }
-            
+            if (currentAdmins.length >= 5) return alert("【上限エラー】\n管理者は最大5人までです。");
             if(!confirm("このメンバーを管理者にしますか？")) return;
-            await docRef.update({
-                admins: firebase.firestore.FieldValue.arrayUnion(uid)
-            });
+            await docRef.update({ admins: firebase.firestore.FieldValue.arrayUnion(uid) });
         } else {
-            if(!confirm("このメンバーから管理者権限を外しますか？（閲覧のみになります）")) return;
-            await docRef.update({
-                admins: firebase.firestore.FieldValue.arrayRemove(uid)
-            });
+            if(!confirm("このメンバーから管理者権限を外しますか？")) return;
+            await docRef.update({ admins: firebase.firestore.FieldValue.arrayRemove(uid) });
         }
         showMemberManagementModal();
-    } catch(e) {
-        alert("権限の変更に失敗しました。");
-        console.error(e);
-    }
+    } catch(e) { alert("権限の変更に失敗しました。"); }
 }
 
 async function transferGM(uid, displayName) {
-    if(!confirm(`本当に「${displayName}」さんにGM（最高権限）を譲渡しますか？\n※あなた自身は通常の管理者に戻ります。`)) return;
-
+    if(!confirm(`本当に「${displayName}」さんにGM（最高権限）を譲渡しますか？`)) return;
     try {
         const docRef = db.collection("teams").doc(currentTeamId);
-        
-        await docRef.update({
-            owner: uid,
-            admins: firebase.firestore.FieldValue.arrayUnion(uid)
-        });
-        
+        await docRef.update({ owner: uid, admins: firebase.firestore.FieldValue.arrayUnion(uid) });
         alert(`GM権限を「${displayName}」さんに移管しました。`);
         showMemberManagementModal();
-    } catch(e) {
-        alert("GMの譲渡に失敗しました。");
-        console.error(e);
-    }
+    } catch(e) { alert("GMの譲渡に失敗しました。"); }
 }
 
 window.onload = function() {
     setupNavigation();
     setupBackupUI();
-    
     const teamFields = [
         { id: 'team-name-input', key: 'team_name' },
         { id: 'manager-name-input', key: 'manager_name' },
         { id: 'captain-name-input', key: 'captain_name' }
     ];
-
     teamFields.forEach(field => {
         const el = document.getElementById(field.id);
         if (el) {
             el.addEventListener('change', async (e) => {
-                if (!checkAdmin()) {
-                    e.target.value = e.target.defaultValue;
-                    return; 
-                }
-                
+                if (!checkAdmin()) { e.target.value = e.target.defaultValue; return; }
                 if (currentTeamId) {
-                    await db.collection("teams").doc(currentTeamId).update({
-                        [field.key]: e.target.value
-                    });
-                    if(field.key === 'team_name') {
-                        document.getElementById('current-team-display').innerText = e.target.value;
-                    }
+                    await db.collection("teams").doc(currentTeamId).update({ [field.key]: e.target.value });
+                    if(field.key === 'team_name') document.getElementById('current-team-display').innerText = e.target.value;
                     e.target.defaultValue = e.target.value;
                 }
             });
@@ -578,15 +442,12 @@ window.onload = function() {
 function setupNavigation() {
     const navItems = document.querySelectorAll('.nav-item');
     const sections = document.querySelectorAll('.content-section');
-    
     navItems.forEach(item => {
         item.addEventListener('click', () => {
             const target = item.getAttribute('data-target');
             navItems.forEach(nav => nav.classList.remove('active'));
             item.classList.add('active');
-            sections.forEach(sec => {
-                sec.classList.toggle('active', sec.id === target);
-            });
+            sections.forEach(sec => sec.classList.toggle('active', sec.id === target));
             if (target === 'stats-page') renderStatsPage();
         });
     });
@@ -598,7 +459,6 @@ function getSuggestedAssistantNumber() {
         if (p.number !== "無") usedNumbers.add(Number(p.number));
         if (p.pastNumbers) p.pastNumbers.forEach(n => usedNumbers.add(Number(n)));
     });
-
     for (let i = 100; i <= 999; i++) {
         if (!usedNumbers.has(i)) return i;
     }
@@ -608,38 +468,31 @@ function getSuggestedAssistantNumber() {
 function formatNumberInput(inputEl) {
     if (!inputEl.value) return;
     let val = inputEl.value;
-    val = val.replace(/[０-９]/g, function(s) {
-        return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
-    });
-    val = val.replace(/[^0-9]/g, '');
+    val = val.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/[^0-9]/g, '');
     inputEl.value = val;
 }
 
 function convertToKatakana(str) {
-    return str.replace(/[\u3041-\u3096]/g, function(match) {
-        const chr = match.charCodeAt(0) + 0x60;
-        return String.fromCharCode(chr);
-    });
+    return str.replace(/[\u3041-\u3096]/g, match => String.fromCharCode(match.charCodeAt(0) + 0x60));
 }
 
+/**
+ * 🌟 選手管理（強化ID・ステータス対応）
+ */
 function showAddPlayerModal() {
     document.getElementById('modal-title').innerText = "選手登録";
     const subPosHtml = positionOptions.map(pos => `
         <label class="checkbox-item"><input type="checkbox" name="sub-pos" value="${pos}"> ${pos}</label>
     `).join('');
-
     const suggestedNum = getSuggestedAssistantNumber();
-
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
             <input type="text" inputmode="numeric" id="p-number" placeholder="背番号 (助っ人候補: ${suggestedNum})" onblur="formatNumberInput(this)">
             <input type="text" id="p-name" placeholder="氏名">
             <input type="text" id="p-furigana" placeholder="フリガナ (任意)" onblur="this.value = convertToKatakana(this.value)">
             <select id="p-side">
-                <option value="右投右打">右投右打</option>
-                <option value="右投左打">右投左打</option>
-                <option value="左投左打">左投左打</option>
-                <option value="左投右打">左投右打</option>
+                <option value="右投右打">右投右打</option><option value="右投左打">右投左打</option>
+                <option value="左投左打">左投左打</option><option value="左投右打">左投右打</option>
             </select>
             <select id="p-main-pos">
                 <option value="" disabled selected>メイン守備</option>
@@ -655,7 +508,6 @@ function showAddPlayerModal() {
 
 function addPlayer() {
     if (!checkAdmin()) return;
-
     const name = document.getElementById('p-name').value;
     const furigana = document.getElementById('p-furigana').value; 
     const mainPos = document.getElementById('p-main-pos').value;
@@ -666,20 +518,17 @@ function addPlayer() {
     numInput = numInput.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/[^0-9]/g, '');
     const numberToSave = numInput === "" ? "無" : String(numInput);
 
+    // 重複チェック（現役のみ）
     if (numberToSave !== "無") {
-        const isDuplicate = players.some(p => {
-            const usedNow = String(p.number) === numberToSave;
-            const usedPast = p.pastNumbers && p.pastNumbers.includes(numberToSave);
-            return usedNow || usedPast;
-        });
-
-        if (isDuplicate) {
-            return alert(`エラー：背番号「${numberToSave}」は登録できません。`);
-        }
+        const isDuplicate = players.some(p => (p.status || "現役") === "現役" && String(p.number) === numberToSave);
+        if (isDuplicate) return alert(`エラー：背番号「${numberToSave}」は既に現役選手が使用中です。`);
     }
 
+    // 同時登録でも絶対に重複しない強化版ID
+    const uniqueId = Date.now().toString() + Math.random().toString(36).substring(2, 9);
+
     players.push({
-        id: Date.now(),
+        id: uniqueId,
         number: numberToSave,
         pastNumbers: [],
         name: name,
@@ -687,6 +536,7 @@ function addPlayer() {
         side: document.getElementById('p-side').value,
         mainPos: mainPos,
         subPos: Array.from(document.querySelectorAll('input[name="sub-pos"]:checked')).map(cb => cb.value),
+        status: "現役", // 🌟 初期値は現役
         stats: { avg: ".000", hits: 0, ab: 0 }
     });
     
@@ -695,24 +545,25 @@ function addPlayer() {
 }
 
 function showPlayerDetail(id) {
-    const p = players.find(player => player.id === id);
+    const p = players.find(player => String(player.id) === String(id));
     if(!p) return;
-    currentEditingPlayerId = id;
+    currentEditingPlayerId = String(id);
 
     const furiHtml = p.furigana ? `<p class="player-furigana">${p.furigana}</p>` : '';
+    const statusText = p.status || '現役';
 
     document.getElementById('modal-title').innerText = "選手情報";
     document.getElementById('modal-body').innerHTML = `
         <div class="view-content">
             ${furiHtml}
-            <p><strong>氏名:</strong> ${p.name}</p>
+            <p><strong>氏名:</strong> ${p.name} <span style="color:#666; font-size:0.85rem;">(${statusText})</span></p>
             <p><strong>背番号:</strong> ${p.number}</p>
             <p><strong>投打:</strong> ${p.side}</p>
             <p><strong>メイン守備:</strong> ${p.mainPos}</p>
-            <p><strong>サブ守備:</strong> ${p.subPos.length > 0 ? p.subPos.join(', ') : "なし"}</p>
+            <p><strong>サブ守備:</strong> ${p.subPos && p.subPos.length > 0 ? p.subPos.join(', ') : "なし"}</p>
             <div class="modal-btns">
-                <button class="btn-edit-mode admin-only" onclick="showEditForm(${id})">編集する</button>
-                <button class="btn-delete admin-only" onclick="deletePlayer(${id})">削除する</button>
+                <button class="btn-edit-mode admin-only" onclick="showEditForm('${id}')">編集・ステータス変更</button>
+                <button class="btn-delete admin-only" onclick="deletePlayer('${id}')">完全に削除する</button>
             </div>
         </div>
     `;
@@ -720,17 +571,20 @@ function showPlayerDetail(id) {
 }
 
 function showEditForm(id) {
-    const p = players.find(player => player.id === id);
+    const p = players.find(player => String(player.id) === String(id));
     document.getElementById('modal-title').innerText = `${p.name} の編集`;
-    
     const subCheckboxesHtml = positionOptions.map(pos => `
-        <label class="checkbox-item"><input type="checkbox" name="edit-sub-pos" value="${pos}" ${p.subPos.includes(pos) ? "checked" : ""}> ${pos}</label>
+        <label class="checkbox-item"><input type="checkbox" name="edit-sub-pos" value="${pos}" ${p.subPos && p.subPos.includes(pos) ? "checked" : ""}> ${pos}</label>
     `).join('');
-
     const suggestedNum = getSuggestedAssistantNumber();
-
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
+            <label>ステータス:</label>
+            <select id="edit-status">
+                <option value="現役" ${(p.status || '現役') === '現役' ? 'selected' : ''}>現役</option>
+                <option value="活動休止中" ${p.status === '活動休止中' ? 'selected' : ''}>活動休止中</option>
+                <option value="OB・OG" ${p.status === 'OB・OG' ? 'selected' : ''}>OB・OG</option>
+            </select>
             <label>氏名:</label> <input type="text" id="edit-name" value="${p.name}">
             <label>フリガナ:</label> <input type="text" id="edit-furigana" value="${p.furigana || ''}" placeholder="フリガナ (任意)" onblur="this.value = convertToKatakana(this.value)">
             <label>背番号:</label> 
@@ -753,34 +607,29 @@ function showEditForm(id) {
 
 function updatePlayer() {
     if (!checkAdmin()) return;
-
-    const p = players.find(player => player.id === currentEditingPlayerId);
+    const p = players.find(player => String(player.id) === String(currentEditingPlayerId));
     if (!p) return;
 
+    const newStatus = document.getElementById('edit-status').value;
     let numInput = document.getElementById('edit-number').value;
     numInput = numInput.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/[^0-9]/g, '');
     const numberToSave = numInput === "" ? "無" : String(numInput);
 
-    if (numberToSave !== "無") {
+    // 現役に復帰（または変更）する場合の他選手との重複チェック
+    if (newStatus === "現役" && numberToSave !== "無") {
         const isDuplicate = players.some(player => {
-            if (player.id === currentEditingPlayerId) return false; 
-            const usedNow = String(player.number) === numberToSave;
-            const usedPast = player.pastNumbers && player.pastNumbers.includes(numberToSave);
-            return usedNow || usedPast;
+            if (String(player.id) === String(currentEditingPlayerId)) return false; 
+            return (player.status || "現役") === "現役" && String(player.number) === numberToSave;
         });
-
-        if (isDuplicate) {
-            return alert(`エラー：背番号「${numberToSave}」は変更できません。`);
-        }
+        if (isDuplicate) return alert(`エラー：背番号「${numberToSave}」は既に他の現役選手が使用中です。`);
     }
 
     if (String(p.number) !== numberToSave && p.number !== "無") {
         if (!p.pastNumbers) p.pastNumbers = [];
-        if (!p.pastNumbers.includes(String(p.number))) {
-            p.pastNumbers.push(String(p.number));
-        }
+        if (!p.pastNumbers.includes(String(p.number))) p.pastNumbers.push(String(p.number));
     }
 
+    p.status = newStatus;
     p.name = document.getElementById('edit-name').value;
     p.furigana = document.getElementById('edit-furigana').value; 
     p.number = numberToSave;
@@ -794,9 +643,8 @@ function updatePlayer() {
 
 function deletePlayer(id) {
     if (!checkAdmin()) return;
-
-    if(confirm("この選手を削除しますか？")) {
-        players = players.filter(p => p.id !== id);
+    if(confirm("本当にこの選手を削除しますか？\n（※OBなどに残したい場合はステータス変更を活用してください）")) {
+        players = players.filter(p => String(p.id) !== String(id));
         saveAndRefreshPlayers();
         closeModal();
     }
@@ -806,17 +654,36 @@ function renderPlayerList() {
     const body = document.getElementById('player-list-body');
     if (!body) return;
 
-    const sortedPlayers = [...players].sort((a, b) => {
-        const numA = (a.number === "無" || a.number === "") ? Infinity : parseFloat(a.number);
-        const numB = (b.number === "無" || b.number === "") ? Infinity : parseFloat(b.number);
-        return numA - numB;
-    });
+    let html = "";
+    const statuses = ["現役", "活動休止中", "OB・OG"];
 
-    body.innerHTML = sortedPlayers.map(p => `
-        <tr><td>${p.number}</td><td><span class="name-link" onclick="showPlayerDetail(${p.id})">${p.name}</span></td><td>${p.side}</td><td>${p.mainPos}</td></tr>
-    `).join('');
+    statuses.forEach(status => {
+        const group = players.filter(p => (p.status || "現役") === status);
+        if (group.length > 0) {
+            html += `<tr class="status-header"><td colspan="4">${status}</td></tr>`;
+            
+            const sortedGroup = group.sort((a, b) => {
+                const numA = (a.number === "無" || a.number === "") ? Infinity : parseFloat(a.number);
+                const numB = (b.number === "無" || b.number === "") ? Infinity : parseFloat(b.number);
+                return numA - numB;
+            });
+
+            sortedGroup.forEach(p => {
+                html += `<tr>
+                    <td>${p.number}</td>
+                    <td><span class="name-link" onclick="showPlayerDetail('${p.id}')">${p.name}</span></td>
+                    <td>${p.side}</td>
+                    <td>${p.mainPos}</td>
+                </tr>`;
+            });
+        }
+    });
+    body.innerHTML = html;
 }
 
+/**
+ * 🌟 試合管理・スコア入力機能
+ */
 function toggleDeleteMode() {
     isGameDeleteMode = !isGameDeleteMode;
     const btn = document.getElementById('toggle-delete-btn');
@@ -829,15 +696,12 @@ function toggleDeleteMode() {
 
 function showAddGameModal(gameId = null) {
     const isEdit = gameId !== null;
-    
     const allPlayerIds = players.map(p => String(p.id));
-
     const g = isEdit ? games.find(game => game.id === gameId) : {
         date: new Date().toISOString().split('T')[0],
         opponent: "", location: "", weather: "晴れ", side: "先攻", 
         participants: allPlayerIds
     };
-
     tempParticipants = g.participants ? [...g.participants] : allPlayerIds;
 
     document.getElementById('modal-title').innerText = isEdit ? "試合情報の編集" : "新規試合登録";
@@ -846,35 +710,29 @@ function showAddGameModal(gameId = null) {
             <label>試合日:</label> <input type="date" id="g-date" value="${g.date}">
             <label>対戦相手:</label> <input type="text" id="g-opponent" value="${g.opponent}" placeholder="相手チーム名">
             <label>球場:</label> <input type="text" id="g-location" value="${g.location}" placeholder="球場名">
-            
             <label>天気:</label>
             <select id="g-weather">
                 <option value="晴れ" ${g.weather==='晴れ'?'selected':''}>☀️ 晴れ</option>
                 <option value="曇り" ${g.weather==='曇り'?'selected':''}>☁️ 曇り</option>
                 <option value="雨" ${g.weather==='雨'?'selected':''}>☔ 雨</option>
             </select>
-            
             <label>自チーム攻守:</label>
             <select id="g-side">
                 <option value="先攻" ${g.side==='先攻'?'selected':''}>先攻</option>
                 <option value="後攻" ${g.side==='後攻'?'selected':''}>後攻</option>
             </select>
-
             <label class="modal-section-label">当日の参加者:</label>
             <p class="help-text mb-10">※デフォルトで全選手が登録されています。欠席者を「✖」で外してください。</p>
-            
             <div class="flex-gap-8">
                 <select id="g-participant-select" class="flex-1"></select>
                 <button type="button" class="btn-small-action btn-small-gray admin-only" onclick="addParticipant()">追加</button>
             </div>
             <div id="g-participants-list" class="participant-list-container"></div>
-
             <div class="modal-btns mt-20">
                 <button class="btn-save admin-only" onclick="processGame(${gameId})">${isEdit ? '変更を保存する' : '試合を作成する'}</button>
             </div>
         </div>
     `;
-    
     renderParticipants();
     document.getElementById('modal-overlay').style.display = 'flex';
 }
@@ -886,7 +744,8 @@ function renderParticipants() {
     let optionsHtml = `<option value="">-- 追加する選手を選択 --</option>`;
     players.forEach(p => {
         if (!tempParticipants.includes(String(p.id))) {
-            optionsHtml += `<option value="${p.id}">[${p.number === "無" ? "無" : '#' + p.number}] ${p.name}</option>`;
+            const pStatus = (p.status === "現役" || !p.status) ? "" : ` (${p.status})`;
+            optionsHtml += `<option value="${p.id}">[${p.number === "無" ? "無" : '#' + p.number}] ${p.name}${pStatus}</option>`;
         }
     });
     selectEl.innerHTML = optionsHtml;
@@ -918,7 +777,6 @@ function removeParticipant(pid) {
 
 function processGame(gameId) {
     if (!checkAdmin()) return;
-
     const date = document.getElementById('g-date').value;
     const opponent = document.getElementById('g-opponent').value;
     if(!date || !opponent) return alert("日付と相手名は必須です");
@@ -944,7 +802,6 @@ function processGame(gameId) {
     } else {
         games.push(gameData);
     }
-    
     saveAndRefreshGames();
     closeModal();
 }
@@ -952,7 +809,6 @@ function processGame(gameId) {
 function renderGameList() {
     const container = document.getElementById('game-list-container');
     const scoreContainer = document.getElementById('score-game-list-container');
-    
     if(!container) return;
     
     const emptyMsg = '<p class="empty-message">試合が登録されていません</p>';
@@ -968,7 +824,6 @@ function renderGameList() {
         const resultText = g.isFinished ? (g.score.us > g.score.them ? ' (勝)' : g.score.us < g.score.them ? ' (敗)' : ' (分)') : ' (未完了)';
         const weatherIcon = g.weather === '晴れ' ? '☀️' : g.weather === '曇り' ? '☁️' : g.weather === '雨' ? '☔' : '❓';
         const pCount = g.participants ? g.participants.length : 0; 
-        
         const deleteBtnHtml = isGameDeleteMode ? `<button class="btn-delete-game mt-10 w-100 admin-only" onclick="deleteGame(${g.id})">この試合を削除</button>` : '';
 
         return `
@@ -979,7 +834,6 @@ function renderGameList() {
                 </div>
                 <p>📅 ${g.date} (${g.side}) | 📍 ${g.location} | 👥 参加: ${pCount}名</p>
                 <p class="score-text">スコア: ${g.score.us} - ${g.score.them}${resultText}</p>
-                
                 <div class="game-card-btns mt-15">
                     <button class="btn-small-action btn-small-blue flex-1 p-10" onclick="showLineupModal(${g.id})">スタメン・打順</button>
                     <button class="btn-small-action btn-small-gray flex-1 p-10 admin-only" onclick="showAddGameModal(${g.id})">試合情報の編集</button>
@@ -999,7 +853,6 @@ function renderGameList() {
                 </div>
                 <p>📅 ${g.date} | 📍 ${g.location}</p>
                 <p class="score-text large">スコア: ${g.score.us} - ${g.score.them}</p>
-                
                 <div class="score-action-container">
                     <button class="btn-small-action btn-small-green w-100 p-10" onclick="showScoreInputModal(${g.id})">イニングスコアボード</button>
                     <div class="flex-gap-8">
@@ -1045,16 +898,15 @@ function renderLineupRows() {
         
         row.innerHTML = `
             <span class="lineup-order">${index + 1}.</span>
-            
             <select class="lineup-player-select" onchange="updateTempLineup(${index}, 'playerId', this.value)">
                 <option value="">-- 選手 --</option>
                 ${players.map(p => {
                     const isSelectedElsewhere = tempLineup.some((t, i) => i !== index && String(t.playerId) === String(p.id));
                     if (isSelectedElsewhere) return ''; 
-                    return `<option value="${p.id}" ${String(p.id) === String(item.playerId) ? 'selected' : ''}>[${p.number === "無" ? "無" : '#' + p.number}] ${p.name}</option>`;
+                    const pStatus = (p.status === "現役" || !p.status) ? "" : ` (${p.status})`;
+                    return `<option value="${p.id}" ${String(p.id) === String(item.playerId) ? 'selected' : ''}>[${p.number === "無" ? "無" : '#' + p.number}] ${p.name}${pStatus}</option>`;
                 }).join('')}
             </select>
-            
             <select class="lineup-pos-select" onchange="updateTempLineup(${index}, 'position', this.value)">
                 <option value="">位置</option>
                 ${lineupPositionOptions.map(pos => {
@@ -1065,7 +917,6 @@ function renderLineupRows() {
                     return `<option value="${pos}" ${pos === item.position ? 'selected' : ''}>${pos}</option>`;
                 }).join('')}
             </select>
-            
             <button class="btn-remove-row admin-only" onclick="removeLineupRow(${index})">✖</button>
         `;
         wrapper.appendChild(row);
@@ -1074,27 +925,20 @@ function renderLineupRows() {
 
 function updateTempLineup(index, key, value) {
     tempLineup[index][key] = value;
-    if (key === 'playerId' || key === 'position') {
-        renderLineupRows();
-    }
+    if (key === 'playerId' || key === 'position') renderLineupRows();
 }
-
 function addLineupRow() {
     tempLineup.push({ playerId: "", position: "", results: [] });
     renderLineupRows();
 }
-
 function removeLineupRow(index) {
     tempLineup.splice(index, 1);
     renderLineupRows();
 }
-
 function saveLineup() {
     if (!checkAdmin()) return;
-
     const filteredLineup = tempLineup.filter(item => item.playerId !== "");
     filteredLineup.forEach(item => { if (!item.results) item.results = []; });
-    
     currentGameForScore.lineup = filteredLineup;
     saveAndRefreshGames();
     closeModal();
@@ -1103,12 +947,8 @@ function saveLineup() {
 function showPitcherModal(gameId) {
     currentGameForScore = games.find(g => g.id === gameId);
     if (!currentGameForScore.pitchers) currentGameForScore.pitchers = [];
-    
     tempPitchers = JSON.parse(JSON.stringify(currentGameForScore.pitchers));
-    
-    if (tempPitchers.length === 0) {
-        tempPitchers.push({ playerId: "", innings: "", outs: "0", er: "", so: "", bb: "" });
-    }
+    if (tempPitchers.length === 0) tempPitchers.push({ playerId: "", innings: "", outs: "0", er: "", so: "", bb: "" });
 
     document.getElementById('modal-title').innerText = `投手成績 (vs ${currentGameForScore.opponent})`;
     document.getElementById('modal-body').innerHTML = `
@@ -1116,9 +956,7 @@ function showPitcherModal(gameId) {
             <p class="help-text mb-10">登板した投手の成績を入力してください。</p>
             <div id="pitcher-wrapper"></div>
             <button class="btn-small-action btn-small-green mt-10 admin-only" onclick="addPitcherRow()">＋ 投手を登録</button>
-            <div class="modal-btns">
-                <button class="btn-save admin-only" onclick="savePitchers()">投手成績を保存</button>
-            </div>
+            <div class="modal-btns"><button class="btn-save admin-only" onclick="savePitchers()">投手成績を保存</button></div>
         </div>
     `;
     renderPitcherRows();
@@ -1128,11 +966,9 @@ function showPitcherModal(gameId) {
 function renderPitcherRows() {
     const wrapper = document.getElementById('pitcher-wrapper');
     wrapper.innerHTML = "";
-
     tempPitchers.forEach((item, index) => {
         const row = document.createElement('div');
         row.className = "pitcher-row";
-        
         row.innerHTML = `
             <div class="flex-gap-8 mb-8">
                 <select class="flex-select" onchange="updatePitcher(${index}, 'playerId', this.value)">
@@ -1140,61 +976,35 @@ function renderPitcherRows() {
                     ${players.map(p => {
                         const isSelected = tempPitchers.some((t, i) => i !== index && String(t.playerId) === String(p.id));
                         if (isSelected) return ''; 
-                        return `<option value="${p.id}" ${String(p.id) === String(item.playerId) ? 'selected' : ''}>[${p.number === "無" ? "無" : '#' + p.number}] ${p.name}</option>`;
+                        const pStatus = (p.status === "現役" || !p.status) ? "" : ` (${p.status})`;
+                        return `<option value="${p.id}" ${String(p.id) === String(item.playerId) ? 'selected' : ''}>[${p.number === "無" ? "無" : '#' + p.number}] ${p.name}${pStatus}</option>`;
                     }).join('')}
                 </select>
                 <button class="btn-remove-row admin-only" onclick="removePitcherRow(${index})">✖</button>
             </div>
-            
             <div class="pitcher-grid">
-                <div>
-                    <label>投球回</label>
-                    <input type="number" min="0" value="${item.innings}" placeholder="回" oninput="updatePitcher(${index}, 'innings', this.value)">
-                </div>
-                <div>
-                    <label>アウト</label>
+                <div><label>投球回</label><input type="number" min="0" value="${item.innings}" oninput="updatePitcher(${index}, 'innings', this.value)"></div>
+                <div><label>アウト</label>
                     <select onchange="updatePitcher(${index}, 'outs', this.value)">
                         <option value="0" ${item.outs == 0 ? 'selected':''}>0/3</option>
                         <option value="1" ${item.outs == 1 ? 'selected':''}>1/3</option>
                         <option value="2" ${item.outs == 2 ? 'selected':''}>2/3</option>
                     </select>
                 </div>
-                <div>
-                    <label>自責点</label>
-                    <input type="number" min="0" value="${item.er}" placeholder="点" oninput="updatePitcher(${index}, 'er', this.value)">
-                </div>
-                <div>
-                    <label>奪三振</label>
-                    <input type="number" min="0" value="${item.so}" placeholder="個" oninput="updatePitcher(${index}, 'so', this.value)">
-                </div>
-                <div>
-                    <label>四死球</label>
-                    <input type="number" min="0" value="${item.bb}" placeholder="個" oninput="updatePitcher(${index}, 'bb', this.value)">
-                </div>
+                <div><label>自責点</label><input type="number" min="0" value="${item.er}" oninput="updatePitcher(${index}, 'er', this.value)"></div>
+                <div><label>奪三振</label><input type="number" min="0" value="${item.so}" oninput="updatePitcher(${index}, 'so', this.value)"></div>
+                <div><label>四死球</label><input type="number" min="0" value="${item.bb}" oninput="updatePitcher(${index}, 'bb', this.value)"></div>
             </div>
         `;
         wrapper.appendChild(row);
     });
 }
 
-function updatePitcher(index, key, value) {
-    tempPitchers[index][key] = value;
-    if (key === 'playerId') renderPitcherRows();
-}
-
-function addPitcherRow() {
-    tempPitchers.push({ playerId: "", innings: "", outs: "0", er: "", so: "", bb: "" });
-    renderPitcherRows();
-}
-
-function removePitcherRow(index) {
-    tempPitchers.splice(index, 1);
-    renderPitcherRows();
-}
-
+function updatePitcher(index, key, value) { tempPitchers[index][key] = value; if (key === 'playerId') renderPitcherRows(); }
+function addPitcherRow() { tempPitchers.push({ playerId: "", innings: "", outs: "0", er: "", so: "", bb: "" }); renderPitcherRows(); }
+function removePitcherRow(index) { tempPitchers.splice(index, 1); renderPitcherRows(); }
 function savePitchers() {
     if (!checkAdmin()) return;
-
     const filtered = tempPitchers.filter(item => item.playerId !== "");
     currentGameForScore.pitchers = filtered;
     saveAndRefreshGames();
@@ -1204,35 +1014,22 @@ function savePitchers() {
 function showAtBatMatrixModal(gameId) {
     currentGameForScore = games.find(g => g.id === gameId);
     const g = currentGameForScore;
-
-    if (!g.lineup || g.lineup.length === 0) {
-        alert("先に「試合情報」タブからスタメン・打順を設定してください。");
-        return;
-    }
-
+    if (!g.lineup || g.lineup.length === 0) return alert("先に「試合情報」タブからスタメン・打順を設定してください。");
     g.lineup.forEach(item => { if (!item.results) item.results = []; });
-
     let maxCols = 5;
-    g.lineup.forEach(item => {
-        if (item.results.length >= maxCols) maxCols = item.results.length + 1;
-    });
+    g.lineup.forEach(item => { if (item.results.length >= maxCols) maxCols = item.results.length + 1; });
     currentAtBatColumns = maxCols;
-
     renderAtBatMatrix();
 }
 
 function renderAtBatMatrix() {
     const g = currentGameForScore;
-
     let headerHtml = `<th>順</th><th class="th-left">選手</th>`;
-    for(let i=0; i<currentAtBatColumns; i++) {
-        headerHtml += `<th>第${i+1}打席</th>`;
-    }
+    for(let i=0; i<currentAtBatColumns; i++) headerHtml += `<th>第${i+1}打席</th>`;
 
     let rowsHtml = g.lineup.map((item, lineIdx) => {
         const player = players.find(p => String(p.id) === String(item.playerId));
         const pName = player ? player.name : "不明";
-        
         let colsHtml = "";
         for(let atBatIdx=0; atBatIdx<currentAtBatColumns; atBatIdx++) {
             const resData = item.results[atBatIdx];
@@ -1240,19 +1037,9 @@ function renderAtBatMatrix() {
             const rbiText = resData && resData.rbi > 0 ? `<span class="rbi-text">${resData.rbi}打点</span>` : "";
             const stealText = resData && resData.steal > 0 ? `<span class="steal-text">${resData.steal}盗</span>` : "";
             const isFilled = text !== "" ? "filled" : "";
-            
-            colsHtml += `<td class="atbat-cell ${isFilled}" onclick="openAtBatInput(${lineIdx}, ${atBatIdx})">
-                            ${text}${rbiText}${stealText}
-                         </td>`;
+            colsHtml += `<td class="atbat-cell ${isFilled}" onclick="openAtBatInput(${lineIdx}, ${atBatIdx})">${text}${rbiText}${stealText}</td>`;
         }
-
-        return `<tr>
-            <td class="td-center-bold">${lineIdx+1}</td>
-            <td class="team-name">
-                ${pName}<br><span class="player-pos-sub">${item.position}</span>
-            </td>
-            ${colsHtml}
-        </tr>`;
+        return `<tr><td class="td-center-bold">${lineIdx+1}</td><td class="team-name">${pName}<br><span class="player-pos-sub">${item.position}</span></td>${colsHtml}</tr>`;
     }).join('');
 
     document.getElementById('modal-title').innerText = "打席成績の入力";
@@ -1260,52 +1047,34 @@ function renderAtBatMatrix() {
         <div class="edit-form">
             <p class="modal-vs-title">vs ${g.opponent}</p>
             <p class="help-text mb-10">入力したい打席の枠をタップしてください。</p>
-
             <div class="score-table-container">
                 <table class="score-table atbat-table">
                     <thead><tr>${headerHtml}</tr></thead>
                     <tbody>${rowsHtml}</tbody>
                 </table>
             </div>
-
             <div class="flex-gap-8 mt-10 admin-only">
                 <button class="btn-small-action btn-small-gray flex-1" onclick="addAtBatColumn()">＋ 列を追加</button>
                 <button class="btn-small-action bg-danger flex-1" onclick="removeAtBatColumn()">ー 列を削除</button>
             </div>
-
-            <div class="modal-btns mt-15">
-                <button class="btn-save bg-gray" onclick="closeModal();">閉じる</button>
-            </div>
+            <div class="modal-btns mt-15"><button class="btn-save bg-gray" onclick="closeModal();">閉じる</button></div>
         </div>
     `;
     document.getElementById('modal-overlay').style.display = 'flex';
 }
 
 function removeAtBatColumn() {
-    if (currentAtBatColumns > 1) {
-        currentAtBatColumns--; 
-        renderAtBatMatrix();
-    } else {
-        alert("これ以上打席列を削除できません。");
-    }
+    if (currentAtBatColumns > 1) { currentAtBatColumns--; renderAtBatMatrix(); } 
+    else alert("これ以上打席列を削除できません。");
 }
-
-function addAtBatColumn() {
-    currentAtBatColumns++;
-    renderAtBatMatrix();
-}
+function addAtBatColumn() { currentAtBatColumns++; renderAtBatMatrix(); }
 
 function openAtBatInput(lineIdx, atBatIdx) {
-    if (!currentTeamAdmins.includes(currentUser.uid)) {
-        alert("【閲覧専用モード】\nこの操作は管理者のみ可能です。");
-        return;
-    }
-
+    if (!currentTeamAdmins.includes(currentUser.uid)) return alert("【閲覧専用モード】\nこの操作は管理者のみ可能です。");
     const g = currentGameForScore;
     const item = g.lineup[lineIdx];
     const player = players.find(p => String(p.id) === String(item.playerId));
     const pName = player ? player.name : "不明";
-
     const currentRes = item.results[atBatIdx] || { result: "", rbi: 0, steal: 0 };
     const resultOptions = ['', '単打', '二塁打', '三塁打', '本塁打', '四死球', '三振', '内野ゴロ', '内野フライ', '外野フライ', 'エラー出塁', '犠打・犠飛'];
     
@@ -1316,22 +1085,18 @@ function openAtBatInput(lineIdx, atBatIdx) {
             <select id="ab-result" class="large-select">
                 ${resultOptions.map(opt => `<option value="${opt}" ${currentRes.result === opt ? 'selected' : ''}>${opt === '' ? '-- 選択してください --' : opt}</option>`).join('')}
             </select>
-
             <div class="flex-gap-8 mt-10">
-                <div class="flex-1">
-                    <label>打点:</label>
+                <div class="flex-1"><label>打点:</label>
                     <select id="ab-rbi" class="large-select w-100">
                         ${[0,1,2,3,4].map(n => `<option value="${n}" ${Number(currentRes.rbi) === n ? 'selected' : ''}>${n}</option>`).join('')}
                     </select>
                 </div>
-                <div class="flex-1">
-                    <label>盗塁:</label>
+                <div class="flex-1"><label>盗塁:</label>
                     <select id="ab-steal" class="large-select w-100">
                         ${[0,1,2,3,4].map(n => `<option value="${n}" ${Number(currentRes.steal) === n ? 'selected' : ''}>${n}</option>`).join('')}
                     </select>
                 </div>
             </div>
-
             <div class="modal-btns mt-20">
                 <button class="btn-save-blue btn-save bg-blue" onclick="saveAndNextAtBat(${lineIdx}, ${atBatIdx})">決定して次の打者へ ➡</button>
                 <button class="btn-save-green btn-save bg-green" onclick="saveAtBatInput(${lineIdx}, ${atBatIdx})">決定して表に戻る</button>
@@ -1344,45 +1109,33 @@ function openAtBatInput(lineIdx, atBatIdx) {
 
 function saveAndNextAtBat(lineIdx, atBatIdx) {
     if (!checkAdmin()) return;
-
-    const res = document.getElementById('ab-result').value;
-    const rbi = document.getElementById('ab-rbi').value;
-    const steal = document.getElementById('ab-steal').value; 
-    
-    currentGameForScore.lineup[lineIdx].results[atBatIdx] = { result: res, rbi: Number(rbi), steal: Number(steal) };
+    currentGameForScore.lineup[lineIdx].results[atBatIdx] = { 
+        result: document.getElementById('ab-result').value, 
+        rbi: Number(document.getElementById('ab-rbi').value), 
+        steal: Number(document.getElementById('ab-steal').value) 
+    };
     saveAndRefreshGames();
-    
     let nextLine = lineIdx + 1;
     let nextAtBat = atBatIdx;
-    
-    if (nextLine >= currentGameForScore.lineup.length) {
-        nextLine = 0;
-        nextAtBat++;
-    }
-    
-    if (nextAtBat >= currentAtBatColumns) {
-        currentAtBatColumns++;
-    }
-    
+    if (nextLine >= currentGameForScore.lineup.length) { nextLine = 0; nextAtBat++; }
+    if (nextAtBat >= currentAtBatColumns) currentAtBatColumns++;
     renderAtBatMatrix(); 
     openAtBatInput(nextLine, nextAtBat);
 }
 
 function saveAtBatInput(lineIdx, atBatIdx) {
     if (!checkAdmin()) return;
-
-    const res = document.getElementById('ab-result').value;
-    const rbi = document.getElementById('ab-rbi').value;
-    const steal = document.getElementById('ab-steal').value; 
-
-    currentGameForScore.lineup[lineIdx].results[atBatIdx] = { result: res, rbi: Number(rbi), steal: Number(steal) };
+    currentGameForScore.lineup[lineIdx].results[atBatIdx] = { 
+        result: document.getElementById('ab-result').value, 
+        rbi: Number(document.getElementById('ab-rbi').value), 
+        steal: Number(document.getElementById('ab-steal').value) 
+    };
     saveAndRefreshGames();
     renderAtBatMatrix(); 
 }
 
 function clearAtBatInput(lineIdx, atBatIdx) {
     if (!checkAdmin()) return;
-
     currentGameForScore.lineup[lineIdx].results[atBatIdx] = { result: "", rbi: 0, steal: 0 };
     saveAndRefreshGames();
     renderAtBatMatrix();
@@ -1390,9 +1143,7 @@ function clearAtBatInput(lineIdx, atBatIdx) {
 
 function showScoreInputModal(gameId) {
     currentGameForScore = games.find(game => game.id === gameId);
-    
     if (!currentGameForScore.innings) currentGameForScore.innings = Array(9).fill().map(() => ({ us: "", them: "" }));
-
     const isAdmin = currentTeamAdmins.includes(currentUser.uid);
     const disabledAttr = isAdmin ? "" : "disabled";
     const labelClass = isAdmin ? "" : "disabled-label";
@@ -1402,12 +1153,10 @@ function showScoreInputModal(gameId) {
         <div class="edit-form">
             <p class="modal-vs-title-lg">vs ${currentGameForScore.opponent}</p>
             <div id="score-board-wrapper"></div>
-            
             <div class="flex-gap-8 mt-10 admin-only">
                 <button class="btn-small-action btn-small-gray flex-1" onclick="addInning()">＋ イニング追加</button>
                 <button class="btn-small-action bg-danger flex-1" onclick="removeInning()">ー イニング削除</button>
             </div>
-
             <label class="checkbox-label-row ${labelClass}">
                 <input type="checkbox" id="s-finished" class="chk-finished" ${currentGameForScore.isFinished ? 'checked' : ''} ${disabledAttr}>
                 この試合を終了とする（集計に反映）
@@ -1420,21 +1169,15 @@ function showScoreInputModal(gameId) {
 }
 
 function removeInning() {
-    if (currentGameForScore.innings.length > 1) {
-        currentGameForScore.innings.pop(); 
-        renderScoreBoardTable();
-    } else {
-        alert("これ以上イニングを削除できません。");
-    }
+    if (currentGameForScore.innings.length > 1) { currentGameForScore.innings.pop(); renderScoreBoardTable(); } 
+    else alert("これ以上イニングを削除できません。");
 }
 
 function renderScoreBoardTable() {
     const g = currentGameForScore;
     const headerHtml = g.innings.map((_, i) => `<th>${i + 1}</th>`).join('');
-    
     const usHtml = g.innings.map((inning, i) => `<td><input type="number" min="0" class="score-input" value="${inning.us}" oninput="updateInningScore(${i}, 'us', this.value)"></td>`).join('');
     const themHtml = g.innings.map((inning, i) => `<td><input type="number" min="0" class="score-input" value="${inning.them}" oninput="updateInningScore(${i}, 'them', this.value)"></td>`).join('');
-    
     let totalUs = g.innings.reduce((sum, inn) => sum + (parseInt(inn.us) || 0), 0);
     let totalThem = g.innings.reduce((sum, inn) => sum + (parseInt(inn.them) || 0), 0);
 
@@ -1458,7 +1201,6 @@ function updateInningScore(index, team, value) {
         renderScoreBoardTable(); 
         return;
     }
-
     currentGameForScore.innings[index][team] = value;
     let totalUs = currentGameForScore.innings.reduce((sum, inn) => sum + (parseInt(inn.us) || 0), 0);
     let totalThem = currentGameForScore.innings.reduce((sum, inn) => sum + (parseInt(inn.them) || 0), 0);
@@ -1466,14 +1208,10 @@ function updateInningScore(index, team, value) {
     document.getElementById('score-total-them').innerText = totalThem;
 }
 
-function addInning() {
-    currentGameForScore.innings.push({ us: "", them: "" });
-    renderScoreBoardTable();
-}
+function addInning() { currentGameForScore.innings.push({ us: "", them: "" }); renderScoreBoardTable(); }
 
 function saveScoreBoard() {
     if (!checkAdmin()) return;
-
     const g = currentGameForScore;
     g.score.us = g.innings.reduce((sum, inn) => sum + (parseInt(inn.us) || 0), 0);
     g.score.them = g.innings.reduce((sum, inn) => sum + (parseInt(inn.them) || 0), 0);
@@ -1485,7 +1223,6 @@ function saveScoreBoard() {
 
 function deleteGame(id) {
     if (!checkAdmin()) return;
-
     if(confirm("試合情報を削除しますか？")) {
         games = games.filter(g => g.id !== id);
         saveAndRefreshGames();
@@ -1496,11 +1233,8 @@ function deleteGame(id) {
 async function saveAndRefreshPlayers() {
     renderPlayerList(); 
     if (currentTeamId) {
-        try {
-            await db.collection("teams").doc(currentTeamId).update({
-                players: players
-            });
-        } catch(e) { console.error("選手保存エラー", e); }
+        try { await db.collection("teams").doc(currentTeamId).update({ players: players }); } 
+        catch(e) { console.error("選手保存エラー", e); }
     }
 }
 
@@ -1508,18 +1242,17 @@ async function saveAndRefreshGames() {
     renderGameList();
     renderStatsPage(); 
     if (currentTeamId) {
-        try {
-            await db.collection("teams").doc(currentTeamId).update({
-                games: games
-            });
-        } catch(e) { console.error("試合保存エラー", e); }
+        try { await db.collection("teams").doc(currentTeamId).update({ games: games }); } 
+        catch(e) { console.error("試合保存エラー", e); }
     }
 }
 
+/**
+ * 🌟 バックアップ・データ管理機能
+ */
 function setupBackupUI() {
     const teamPage = document.getElementById('team-page');
     if (!teamPage) return;
-
     const backupDiv = document.createElement('div');
     backupDiv.className = 'card mt-20';
     backupDiv.innerHTML = `
@@ -1538,43 +1271,29 @@ function setupBackupUI() {
 
 function exportData() {
     const data = {
-        players: JSON.stringify(players),
-        games: JSON.stringify(games),
+        players: JSON.stringify(players), games: JSON.stringify(games),
         team_name: document.getElementById('team-name-input').value,
         manager_name: document.getElementById('manager-name-input').value,
         captain_name: document.getElementById('captain-name-input').value
     };
-    const jsonStr = JSON.stringify(data);
-    const blob = new Blob([jsonStr], {type: "application/json"});
+    const blob = new Blob([JSON.stringify(data)], {type: "application/json"});
     const url = URL.createObjectURL(blob);
-    
     const a = document.createElement('a');
-    a.href = url;
-    a.download = `baseball_backup_${new Date().toISOString().slice(0,10)}.json`;
-    a.click();
-    
-    URL.revokeObjectURL(url);
+    a.href = url; a.download = `baseball_backup_${new Date().toISOString().slice(0,10)}.json`;
+    a.click(); URL.revokeObjectURL(url);
 }
 
 function importData(event) {
-    if (!checkAdmin()) {
-        event.target.value = '';
-        return; 
-    }
-
+    if (!checkAdmin()) { event.target.value = ''; return; }
     const file = event.target.files[0];
     if (!file) return;
-    
     if(!confirm("現在のチームデータがすべて上書きされます。復元を実行してもよろしいですか？")) {
-        event.target.value = '';
-        return;
+        event.target.value = ''; return;
     }
-
     const reader = new FileReader();
     reader.onload = async function(e) {
         try {
             const data = JSON.parse(e.target.result);
-            
             if (data.players) players = JSON.parse(data.players);
             if (data.games) games = JSON.parse(data.games);
             const newTeamName = data.team_name || document.getElementById('team-name-input').value;
@@ -1583,20 +1302,13 @@ function importData(event) {
 
             if (currentTeamId) {
                 await db.collection("teams").doc(currentTeamId).update({
-                    players: players,
-                    games: games,
-                    team_name: newTeamName,
-                    manager_name: newManagerName,
-                    captain_name: newCaptainName
+                    players: players, games: games, team_name: newTeamName,
+                    manager_name: newManagerName, captain_name: newCaptainName
                 });
             }
-            
             alert('クラウドへのデータの復元が完了しました！');
             selectTeam(currentTeamId, newTeamName);
-        } catch (error) {
-            alert('ファイルの読み込みに失敗しました。');
-            console.error(error);
-        }
+        } catch (error) { alert('ファイルの読み込みに失敗しました。'); console.error(error); }
     };
     reader.readAsText(file);
 }
@@ -1610,19 +1322,19 @@ function showHelpModal(pageId) {
                     <p><strong>【はじめての方（新規登録）】</strong></p>
                     <p>1. お使いの「メールアドレス」と「お好きなパスワード」を入力します。</p>
                     <p>2. 「ログイン / 新規登録」ボタンを押します。</p>
-                    <p>3. 確認画面が出たら「OK」を押し、ご自身の名前（表示名）を入力して登録完了です！</p>
+                    <p>3. 確認画面が出たら「OK」を押し、ご自身の名前を入力して登録完了です！</p>
                     <hr class="modal-hr">
                     <p><strong>【すでに登録済みの方（ログイン）】</strong></p>
-                    <p>登録した「メールアドレス」と「パスワード」を入力し、「ログイン / 新規登録」ボタンを押してログインしてください。</p>
+                    <p>登録した「メールアドレス」と「パスワード」を入力し、ログインしてください。</p>
                 </div>`
         },
-
         team: {
             title: "チーム情報の使い方",
             content: `
                 <div class="help-content-modal">
                     <p>・チームの基本情報と、所属する<strong>選手の名簿</strong>を管理します。</p>
-                    <p>・「選手登録」からメンバーを追加してください（背番号の重複はできません）。</p>
+                    <p>・「選手登録」からメンバーを追加してください（現役選手の背番号重複はできません）。</p>
+                    <p>・選手ごとのステータス（現役・活動休止中・OB/OG）も設定可能です。</p>
                 </div>`
         },
         game: {
@@ -1630,9 +1342,8 @@ function showHelpModal(pageId) {
             content: `
                 <div class="help-content-modal">
                     <p>・試合のスケジュールと<strong>当日のスタメン</strong>を登録します。</p>
-                    <p>・まずは「新規試合登録」から、対戦相手や<strong>当日の参加者</strong>を登録してください（欠席者を✖で外します）。</p>
+                    <p>・まずは「新規試合登録」から対戦相手や参加者を登録してください。</p>
                     <p>・次に、青い「スタメン・打順」ボタンを押してオーダーを組みます。</p>
-                    <p>・試合を削除したい時は、右上の「編集」ボタンを押すと削除ボタンが現れます。</p>
                 </div>`
         },
         score: {
@@ -1640,33 +1351,33 @@ function showHelpModal(pageId) {
             content: `
                 <div class="help-content-modal">
                     <p>・試合中の<strong>結果入力（スコアブック）</strong>を行うページです。</p>
-                    <p>・<strong>打席成績：</strong>表のマス目をタップして、打席ごとの結果（安打・打点・盗塁など）を入力します。</p>
+                    <p>・<strong>打席成績：</strong>表のマス目をタップして結果を入力します。</p>
                     <p>・<strong>投手成績：</strong>登板した投手の投球回や自責点を入力します。</p>
-                    <p>・試合が終わったら「イニングスコアボード」を開き、<strong>『この試合を終了とする（集計に反映）』にチェックを入れて保存</strong>してください。これで成績に反映されます。</p>
+                    <p>・試合が終わったら「イニングスコアボード」を開き、<strong>『この試合を終了とする』にチェックを入れて保存</strong>してください。成績に反映されます。</p>
                 </div>`
         },
         stats: {
             title: "成績表示の使い方",
             content: `
                 <div class="help-content-modal">
-                    <p>・「終了済（集計に反映）」になった試合のデータから、<strong>個人の打撃成績と投手成績を自動で計算</strong>して表示します。</p>
-                    <p>・「表示シーズン」のプルダウンを切り替えることで、<strong>年度ごとの成績</strong>に絞り込んで確認することができます。</p>
+                    <p>・「終了済」になった試合のデータから、<strong>個人の打撃成績と投手成績を自動で計算</strong>して表示します。</p>
+                    <p>・「表示シーズン」のプルダウンで年度ごとの成績に絞り込めます。</p>
                 </div>`
         }
     };
-
     const data = helpData[pageId];
     if (!data) return;
-
     document.getElementById('modal-title').innerText = data.title;
     document.getElementById('modal-body').innerHTML = data.content;
     document.getElementById('modal-overlay').style.display = 'flex';
 }
 
+/**
+ * 🌟 成績・表示の更新
+ */
 function updateTeamRecord() {
     const el = document.getElementById('team-record');
     if(!el) return;
-
     const finishedGames = games.filter(g => g.isFinished);
     const years = [...new Set(finishedGames.map(g => g.date.substring(0, 4)))].sort((a, b) => b - a);
 
@@ -1681,7 +1392,6 @@ function updateTeamRecord() {
         };
         el.parentNode.insertBefore(selectEl, el);
     }
-
     selectEl.innerHTML = `<option value="all" ${currentRecordYear==='all'?'selected':''}>通算成績</option>` +
         years.map(y => `<option value="${y}" ${currentRecordYear===String(y)?'selected':''}>${y}年度</option>`).join('');
 
@@ -1692,7 +1402,6 @@ function updateTeamRecord() {
         else if(g.score.us < g.score.them) losses++;
         else draws++;
     });
-    
     el.innerText = `${wins}勝 ${losses}敗 ${draws}分`;
 }
 
@@ -1704,40 +1413,25 @@ function changeStatsYear(year) {
 function renderStatsPage() {
     const statsContainer = document.querySelector('#stats-page .card');
     if (!statsContainer) return;
-
     const finishedGames = games.filter(g => g.isFinished);
     const years = [...new Set(finishedGames.map(g => g.date.substring(0, 4)))].sort((a, b) => b - a);
 
     let yearOptionsHtml = `<option value="all" ${currentStatsYear === 'all' ? 'selected' : ''}>通算成績</option>`;
-    years.forEach(y => {
-        yearOptionsHtml += `<option value="${y}" ${currentStatsYear === String(y) ? 'selected' : ''}>${y}年度</option>`;
-    });
+    years.forEach(y => { yearOptionsHtml += `<option value="${y}" ${currentStatsYear === String(y) ? 'selected' : ''}>${y}年度</option>`; });
 
     const filterHtml = `
         <div class="filter-container">
             <label class="filter-label">表示シーズン:</label>
-            <select id="stats-year-select" class="filter-select" onchange="changeStatsYear(this.value)">
-                ${yearOptionsHtml}
-            </select>
+            <select id="stats-year-select" class="filter-select" onchange="changeStatsYear(this.value)">${yearOptionsHtml}</select>
         </div>
     `;
 
-    const targetGames = finishedGames.filter(g => {
-        if (currentStatsYear === "all") return true;
-        return g.date.substring(0, 4) === currentStatsYear;
-    });
-
+    const targetGames = finishedGames.filter(g => currentStatsYear === "all" || g.date.substring(0, 4) === currentStatsYear);
     const playerStats = {};
     const pitcherStats = {};
     players.forEach(p => {
-        playerStats[p.id] = {
-            name: p.name, number: p.number === "無" ? "-" : p.number,
-            games: 0, pa: 0, ab: 0, hits: 0, hr: 0, rbi: 0, sb: 0, bb: 0, so: 0
-        };
-        pitcherStats[p.id] = {
-            name: p.name, number: p.number === "無" ? "-" : p.number,
-            games: 0, outs: 0, er: 0, so: 0, bb: 0
-        };
+        playerStats[p.id] = { name: p.name, number: p.number === "無" ? "-" : p.number, games: 0, pa: 0, ab: 0, hits: 0, hr: 0, rbi: 0, sb: 0, bb: 0, so: 0 };
+        pitcherStats[p.id] = { name: p.name, number: p.number === "無" ? "-" : p.number, games: 0, outs: 0, er: 0, so: 0, bb: 0 };
     });
 
     targetGames.forEach(g => {
@@ -1752,11 +1446,9 @@ function renderStatsPage() {
                     playerStats[pid].pa++; 
                     playerStats[pid].rbi += (res.rbi || 0); 
                     playerStats[pid].sb += (res.steal || 0);
-
                     const r = res.result;
                     if (['単打', '二塁打', '三塁打', '本塁打'].includes(r)) {
-                        playerStats[pid].ab++; 
-                        playerStats[pid].hits++; 
+                        playerStats[pid].ab++; playerStats[pid].hits++; 
                         if (r === '本塁打') playerStats[pid].hr++;
                     } else if (['三振', '内野ゴロ', '内野フライ', '外野フライ', 'エラー出塁'].includes(r)) {
                         playerStats[pid].ab++; 
@@ -1768,15 +1460,12 @@ function renderStatsPage() {
                 if (playedInGame) playerStats[pid].games++; 
             });
         }
-        
         if (g.pitchers) {
             g.pitchers.forEach(item => {
                 const pid = item.playerId;
                 if (!pid || !pitcherStats[pid]) return;
-                
                 pitcherStats[pid].games++;
-                const totalOuts = (parseInt(item.innings) || 0) * 3 + (parseInt(item.outs) || 0);
-                pitcherStats[pid].outs += totalOuts;
+                pitcherStats[pid].outs += (parseInt(item.innings) || 0) * 3 + (parseInt(item.outs) || 0);
                 pitcherStats[pid].er += (parseInt(item.er) || 0);
                 pitcherStats[pid].so += (parseInt(item.so) || 0);
                 pitcherStats[pid].bb += (parseInt(item.bb) || 0);
@@ -1788,9 +1477,7 @@ function renderStatsPage() {
         if (s.ab > 0) {
             let avgNum = s.hits / s.ab;
             s.avg = avgNum === 1 ? "1.000" : avgNum.toFixed(3).replace(/^0\./, '.'); 
-        } else {
-            s.avg = ".000";
-        }
+        } else s.avg = ".000";
         return s;
     });
 
@@ -1798,12 +1485,7 @@ function renderStatsPage() {
         let innFull = Math.floor(s.outs / 3);
         let innRem = s.outs % 3;
         s.ipDisplay = innRem > 0 ? `${innFull} ${innRem}/3` : `${innFull}`;
-
-        if (s.outs > 0) {
-            s.era = ((s.er * 7 * 3) / s.outs).toFixed(2);
-        } else {
-            s.era = "-";
-        }
+        s.era = s.outs > 0 ? ((s.er * 7 * 3) / s.outs).toFixed(2) : "-";
         return s;
     });
 
@@ -1815,58 +1497,18 @@ function renderStatsPage() {
         pStatsArray = pStatsArray.filter(s => s.outs > 0 || s.games > 0);
     }
 
-    bStatsArray.sort((a, b) => {
-        const avgA = parseFloat(a.avg) || 0;
-        const avgB = parseFloat(b.avg) || 0;
-        if (avgB !== avgA) return avgB - avgA;
-        return b.pa - a.pa;
-    });
+    bStatsArray.sort((a, b) => { const avgA = parseFloat(a.avg) || 0; const avgB = parseFloat(b.avg) || 0; return avgB !== avgA ? avgB - avgA : b.pa - a.pa; });
+    pStatsArray.sort((a, b) => { const eraA = a.era === "-" ? 999 : parseFloat(a.era); const eraB = b.era === "-" ? 999 : parseFloat(b.era); return eraA - eraB; });
 
-    pStatsArray.sort((a, b) => {
-        const eraA = a.era === "-" ? 999 : parseFloat(a.era);
-        const eraB = b.era === "-" ? 999 : parseFloat(b.era);
-        return eraA - eraB;
-    });
-
-    let html = filterHtml;
-
-    html += `<h3 class="stats-h3 mt-10">打撃成績</h3>`;
+    let html = filterHtml + `<h3 class="stats-h3 mt-10">打撃成績</h3>`;
     html += `
         <div class="table-container">
             <table>
                 <thead>
-                    <tr>
-                        <th>背番</th>
-                        <th class="th-left">氏名</th>
-                        <th>打率</th>
-                        <th>試合</th>
-                        <th>打席</th>
-                        <th>打数</th>
-                        <th>安打</th>
-                        <th>本塁打</th>
-                        <th>打点</th>
-                        <th>盗塁</th>
-                        <th>四死球</th>
-                        <th>三振</th>
-                    </tr>
+                    <tr><th>背番</th><th class="th-left">氏名</th><th>打率</th><th>試合</th><th>打席</th><th>打数</th><th>安打</th><th>本塁打</th><th>打点</th><th>盗塁</th><th>四死球</th><th>三振</th></tr>
                 </thead>
                 <tbody>
-                    ${bStatsArray.map(s => `
-                        <tr>
-                            <td>${s.number}</td>
-                            <td class="td-left-bold">${s.name}</td>
-                            <td class="td-highlight-green">${s.avg}</td>
-                            <td>${s.games}</td>
-                            <td>${s.pa}</td>
-                            <td>${s.ab}</td>
-                            <td>${s.hits}</td>
-                            <td>${s.hr}</td>
-                            <td>${s.rbi}</td>
-                            <td>${s.sb}</td>
-                            <td>${s.bb}</td>
-                            <td>${s.so}</td>
-                        </tr>
-                    `).join('')}
+                    ${bStatsArray.map(s => `<tr><td>${s.number}</td><td class="td-left-bold">${s.name}</td><td class="td-highlight-green">${s.avg}</td><td>${s.games}</td><td>${s.pa}</td><td>${s.ab}</td><td>${s.hits}</td><td>${s.hr}</td><td>${s.rbi}</td><td>${s.sb}</td><td>${s.bb}</td><td>${s.so}</td></tr>`).join('')}
                 </tbody>
             </table>
         </div>
@@ -1879,37 +1521,14 @@ function renderStatsPage() {
         html += `
             <div class="table-container">
                 <table>
-                    <thead>
-                        <tr>
-                            <th>背番</th>
-                            <th class="th-left">氏名</th>
-                            <th>防御率</th>
-                            <th>登板</th>
-                            <th>投球回</th>
-                            <th>自責点</th>
-                            <th>奪三振</th>
-                            <th>四死球</th>
-                        </tr>
-                    </thead>
+                    <thead><tr><th>背番</th><th class="th-left">氏名</th><th>防御率</th><th>登板</th><th>投球回</th><th>自責点</th><th>奪三振</th><th>四死球</th></tr></thead>
                     <tbody>
-                        ${pStatsArray.map(s => `
-                            <tr>
-                                <td>${s.number}</td>
-                                <td class="td-left-bold">${s.name}</td>
-                                <td class="td-highlight-blue">${s.era}</td>
-                                <td>${s.games}</td>
-                                <td>${s.ipDisplay}</td>
-                                <td>${s.er}</td>
-                                <td>${s.so}</td>
-                                <td>${s.bb}</td>
-                            </tr>
-                        `).join('')}
+                        ${pStatsArray.map(s => `<tr><td>${s.number}</td><td class="td-left-bold">${s.name}</td><td class="td-highlight-blue">${s.era}</td><td>${s.games}</td><td>${s.ipDisplay}</td><td>${s.er}</td><td>${s.so}</td><td>${s.bb}</td></tr>`).join('')}
                     </tbody>
                 </table>
             </div>
         `;
     }
-
     statsContainer.innerHTML = html;
 }
 
