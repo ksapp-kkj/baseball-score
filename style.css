@@ -815,3 +815,8 @@ th {
 .color-grass { color: var(--grass-green); }
 .color-orange { color: #ff9800; }
 .text-lg { font-size: 1rem; }
+
+/* 🌟 ログイン画面のタイトルを中央揃えにする */
+#login-screen h2 {
+    justify-content: center;
+}
