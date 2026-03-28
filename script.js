@@ -919,22 +919,30 @@ function renderGameList() {
         const pCount = g.participants ? g.participants.length : 0; 
         const deleteBtnHtml = isGameDeleteMode ? `<button class="btn-delete-game mt-10 w-100 admin-only" onclick="deleteGame(${g.id})">この試合を削除</button>` : '';
 
+        // 🌟 修正：アコーディオン式に構造を変更
         return `
-            <div class="game-card">
-                <div class="game-card-header">
-                    <h4>vs ${g.opponent}</h4>
-                    <span class="weather-icon">${weatherIcon}</span>
+            <div id="game-card-${g.id}" class="game-card accordion-card">
+                <div class="game-accordion-header" onclick="toggleGameAccordion(${g.id})">
+                    <div class="game-date-text">📅 ${g.date} (${g.side})</div>
+                    <div class="game-opponent-text">vs ${g.opponent}</div>
                 </div>
-                <p>📅 ${g.date} (${g.side}) | 📍 ${g.location} | 👥 参加: ${pCount}名</p>
-                <p class="score-text">スコア: ${g.score.us} - ${g.score.them}${resultText}</p>
-                <div class="game-card-btns mt-15">
-                    <button class="btn-small-action btn-small-blue flex-1 p-10" onclick="showLineupModal(${g.id})">スタメン・打順</button>
-                    <button class="btn-small-action btn-small-gray flex-1 p-10 admin-only" onclick="showAddGameModal(${g.id})">試合情報の編集</button>
+                
+                <div class="game-accordion-body">
+                    <div class="game-detail-text">☁️ 天気: ${g.weather}</div>
+                    <div class="game-detail-text">📍 場所: ${g.location}</div>
+                    <div class="game-detail-text">👥 参加: ${pCount}名</div>
+                    <div class="game-detail-text score-text mt-10">スコア: ${g.score.us} - ${g.score.them}${resultText}</div>
+                    
+                    <div class="game-card-btns mt-15">
+                        <button class="btn-small-action btn-small-blue flex-1 p-10" onclick="showLineupModal(${g.id})">スタメン・打順</button>
+                        <button class="btn-small-action btn-small-gray flex-1 p-10 admin-only" onclick="showAddGameModal(${g.id})">試合情報の編集</button>
+                    </div>
+                    ${deleteBtnHtml}
                 </div>
-                ${deleteBtnHtml}
             </div>`;
     }).join('');
 
+    // スコア入力画面側は従来通りの表示を維持
     if(scoreContainer) {
         scoreContainer.innerHTML = sortedGames.map(g => {
             const weatherIcon = g.weather === '晴れ' ? '☀️' : g.weather === '曇り' ? '☁️' : g.weather === '雨' ? '☔' : '❓';
@@ -955,6 +963,14 @@ function renderGameList() {
                 </div>
             </div>`;
         }).join('');
+    }
+}
+
+// 🌟 新規追加：アコーディオンの開閉を切り替える関数
+function toggleGameAccordion(id) {
+    const card = document.getElementById(`game-card-${id}`);
+    if (card) {
+        card.classList.toggle('open');
     }
 }
 
