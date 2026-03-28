@@ -851,3 +851,55 @@ input[type="checkbox"] {
     appearance: auto;
     -webkit-appearance: auto;
 }
+
+/* 🌟 試合一覧のアコーディオン用スタイル */
+.accordion-card .game-accordion-body {
+    display: none;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px dashed #ccc;
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+.accordion-card.open .game-accordion-body {
+    display: block;
+}
+
+.game-accordion-header {
+    cursor: pointer;
+    position: relative;
+    padding-right: 25px; /* 矢印アイコンのスペース */
+}
+
+/* 開閉を知らせる矢印アイコン */
+.game-accordion-header::after {
+    content: '▼';
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #aaa;
+    font-size: 0.9rem;
+    transition: transform 0.2s;
+}
+
+/* 開いている時は矢印を逆に向ける */
+.accordion-card.open .game-accordion-header::after {
+    transform: translateY(-50%) rotate(180deg);
+}
+
+/* アコーディオン内のテキストデザイン */
+.game-date-text {
+    font-size: 0.85rem;
+    color: #666;
+}
+.game-opponent-text {
+    font-size: 1.3rem;
+    font-weight: bold;
+    color: var(--grass-green);
+    margin-top: 5px;
+}
+.game-detail-text {
+    font-size: 0.95rem;
+    margin-bottom: 5px;
+}
