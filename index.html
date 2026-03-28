@@ -11,7 +11,7 @@
 
     <div id="login-screen" class="app-screen active">
         <div class="login-wrapper">
-            <h2>⚾️野球スコア管理 <span class="help-trigger" onclick="showHelpModal('login')">📝</span></h2>
+            <h2>⚾️野球スコア管理 <span class="help-trigger" onclick="showHelpModal('login')">❓使い方</span></h2>
             
             <div id="login-form-container" class="card mt-20">
                 <h3 class="mb-15 color-grass">ログイン</h3>
@@ -109,13 +109,13 @@
                 <div class="nav-item active" data-target="team-page">チーム情報</div>
                 <div class="nav-item" data-target="game-page">試合情報</div>
                 <div class="nav-item" data-target="score-page">スコア入力</div>
-                <div class="nav-item" data-target="stats-page">成績表示</div>
+                <div class="nav-item" data-target="stats-page">成績</div>
             </div>
         </nav>
 
         <main>
             <section id="team-page" class="content-section active">
-                <h2>チーム情報 <span class="help-trigger" onclick="showHelpModal('team')">📝</span></h2>
+                <h2>チーム情報 <span class="help-trigger" onclick="showHelpModal('team')">❓使い方</span></h2>
                 
                 <button id="manage-members-btn" class="btn-manage-members hidden" onclick="showMemberManagementModal()">👥 チームメンバーと権限の管理</button>
 
@@ -131,12 +131,13 @@
                     </div>
                     <div class="form-group">
                         <label>監督名:</label>
-                        <input type="text" id="manager-name-input" placeholder="監督名">
+                        <input type="text" id="manager-name-input" placeholder="監督名" list="team-members-list">
                     </div>
                     <div class="form-group">
                         <label>主将名:</label>
-                        <input type="text" id="captain-name-input" placeholder="主将名">
+                        <input type="text" id="captain-name-input" placeholder="主将名" list="team-members-list">
                     </div>
+                    <datalist id="team-members-list"></datalist>
                 </div>
 
                 <div class="list-header">
@@ -162,11 +163,18 @@
 
             <section id="game-page" class="content-section">
                 <div class="list-header">
-                    <h2>試合管理 <span class="help-trigger" onclick="showHelpModal('game')">📝</span></h2>
+                    <h2>試合管理 <span class="help-trigger" onclick="showHelpModal('game')">❓使い方</span></h2>
                     <div class="flex-gap-8">
                         <button class="btn-small-edit admin-only" id="toggle-delete-btn" onclick="toggleDeleteMode()">編集</button>
                         <button class="btn-add admin-only" onclick="showAddGameModal()">新規試合登録</button>
                     </div>
+                </div>
+
+                <div class="filter-container">
+                    <label class="filter-label">表示年:</label>
+                    <select id="game-year-select" class="filter-select" onchange="changeGameYear(this.value)">
+                        <option value="all">通算</option>
+                    </select>
                 </div>
                 
                 <div id="game-list-container">
@@ -175,7 +183,14 @@
             </section>
 
             <section id="score-page" class="content-section">
-                <h2>スコア入力 <span class="help-trigger" onclick="showHelpModal('score')">📝</span></h2>
+                <h2>スコア入力 <span class="help-trigger" onclick="showHelpModal('score')">❓使い方</span></h2>
+
+                <div class="filter-container">
+                    <label class="filter-label">表示年:</label>
+                    <select id="score-year-select" class="filter-select" onchange="changeGameYear(this.value)">
+                        <option value="all">通算</option>
+                    </select>
+                </div>
                 
                 <div id="score-game-list-container">
                     <p class="empty-message">試合が登録されていません</p>
@@ -183,7 +198,7 @@
             </section>
 
             <section id="stats-page" class="content-section">
-                <h2>通算成績 <span class="help-trigger" onclick="showHelpModal('stats')">📝</span></h2>
+                <h2>成績 <span class="help-trigger" onclick="showHelpModal('stats')">❓使い方</span></h2>
                 
                 <div class="card">
                     <p>個人成績・チーム統計は現在準備中です。</p>
