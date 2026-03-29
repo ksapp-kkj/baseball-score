@@ -741,10 +741,18 @@ function renderPlayerList() {
     });
     body.innerHTML = html;
 
-    // 🌟 追加：監督・主将の入力候補（datalist）を登録選手一覧で更新
+    // 🌟 修正：監督・主将の入力候補（datalist）を「背番号順」で更新
     const datalist = document.getElementById('team-members-list');
     if (datalist) {
-        datalist.innerHTML = players.map(p => `<option value="${p.name}"></option>`).join('');
+        // 全選手を背番号順に並び替え（「無」は一番下へ）
+        const sortedAllPlayers = [...players].sort((a, b) => {
+            const numA = (a.number === "無" || a.number === "") ? Infinity : parseFloat(a.number);
+            const numB = (b.number === "無" || b.number === "") ? Infinity : parseFloat(b.number);
+            return numA - numB;
+        });
+        
+        // 並び替えた配列を使って option を生成
+        datalist.innerHTML = sortedAllPlayers.map(p => `<option value="${p.name}"></option>`).join('');
     }
 }
 
@@ -913,13 +921,13 @@ function renderGameList() {
 
     const sortedGames = [...targetGames].sort((a, b) => new Date(b.date) - new Date(a.date));
 
+    // 🌟 試合管理タブの描画
     container.innerHTML = sortedGames.map(g => {
         const resultText = g.isFinished ? (g.score.us > g.score.them ? ' (勝)' : g.score.us < g.score.them ? ' (敗)' : ' (分)') : ' (未完了)';
         const weatherIcon = g.weather === '晴れ' ? '☀️' : g.weather === '曇り' ? '☁️' : g.weather === '雨' ? '☔' : '❓';
         const pCount = g.participants ? g.participants.length : 0; 
         const deleteBtnHtml = isGameDeleteMode ? `<button class="btn-delete-game mt-10 w-100 admin-only" onclick="deleteGame(${g.id})">この試合を削除</button>` : '';
 
-        // 🌟 修正：アコーディオン式に構造を変更
         return `
             <div id="game-card-${g.id}" class="game-card accordion-card">
                 <div class="game-accordion-header" onclick="toggleGameAccordion(${g.id})">
@@ -942,28 +950,49 @@ function renderGameList() {
             </div>`;
     }).join('');
 
-    // スコア入力画面側は従来通りの表示を維持
+    // 🌟 スコア入力タブの描画（アコーディオン化）
     if(scoreContainer) {
         scoreContainer.innerHTML = sortedGames.map(g => {
             const weatherIcon = g.weather === '晴れ' ? '☀️' : g.weather === '曇り' ? '☁️' : g.weather === '雨' ? '☔' : '❓';
+            const pCount = g.participants ? g.participants.length : 0;
+            const resultText = g.isFinished ? (g.score.us > g.score.them ? ' (勝)' : g.score.us < g.score.them ? ' (敗)' : ' (分)') : ' (未完了)';
+
             return `
-            <div class="game-card">
-                <div class="game-card-header">
-                    <h4>vs ${g.opponent}</h4>
-                    <span class="weather-icon">${weatherIcon}</span>
+            <div id="score-card-${g.id}" class="game-card accordion-card">
+                <div class="game-accordion-header" onclick="toggleScoreAccordion(${g.id})">
+                    <div class="game-date-text">📅 ${g.date} (${g.side})</div>
+                    <div class="game-opponent-text">vs ${g.opponent}</div>
                 </div>
-                <p>📅 ${g.date} | 📍 ${g.location}</p>
-                <p class="score-text large">スコア: ${g.score.us} - ${g.score.them}</p>
-                <div class="score-action-container">
-                    <button class="btn-small-action btn-small-green w-100 p-10" onclick="showScoreInputModal(${g.id})">イニングスコアボード</button>
-                    <div class="flex-gap-8">
-                        <button class="btn-small-action btn-small-orange flex-1 p-10" onclick="showAtBatMatrixModal(${g.id})">打席成績</button>
-                        <button class="btn-small-action btn-small-purple flex-1 p-10" onclick="showPitcherModal(${g.id})">投手成績</button>
+                
+                <div class="game-accordion-body">
+                    <div class="game-detail-text">☁️ 天気: ${g.weather}</div>
+                    <div class="game-detail-text">📍 場所: ${g.location}</div>
+                    <div class="game-detail-text">👥 参加: ${pCount}名</div>
+                    <p class="score-text large mt-10">スコア: ${g.score.us} - ${g.score.them}${resultText}</p>
+                    
+                    <div class="score-action-container mt-15">
+                        <button class="btn-small-action btn-small-green w-100 p-10" onclick="showScoreInputModal(${g.id})">イニングスコアボード</button>
+                        <div class="flex-gap-8">
+                            <button class="btn-small-action btn-small-orange flex-1 p-10" onclick="showAtBatMatrixModal(${g.id})">打席成績</button>
+                            <button class="btn-small-action btn-small-purple flex-1 p-10" onclick="showPitcherModal(${g.id})">投手成績</button>
+                        </div>
                     </div>
                 </div>
             </div>`;
         }).join('');
     }
+}
+
+// 試合管理用のアコーディオン開閉
+function toggleGameAccordion(id) {
+    const card = document.getElementById(`game-card-${id}`);
+    if (card) card.classList.toggle('open');
+}
+
+// 🌟 新規追加：スコア入力用のアコーディオン開閉
+function toggleScoreAccordion(id) {
+    const card = document.getElementById(`score-card-${id}`);
+    if (card) card.classList.toggle('open');
 }
 
 // 🌟 新規追加：アコーディオンの開閉を切り替える関数
