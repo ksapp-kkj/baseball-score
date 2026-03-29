@@ -62,17 +62,23 @@ function showLoginForm() {
 }
 
 /**
- * 🌟 Firebase 認証
+ * 🌟 onAuthStateChanged の修正（名前更新時にパスワードを消さないようにする）
  */
 auth.onAuthStateChanged(async (user) => {
     if (user) {
         currentUser = user;
         const uDoc = await db.collection("users").doc(user.uid).get();
+        let userName = "名称未設定";
         if (uDoc.exists && uDoc.data().name) {
-            document.getElementById('edit-username-input').value = uDoc.data().name;
+            userName = uDoc.data().name;
+            document.getElementById('edit-username-input').value = userName;
         } else {
             document.getElementById('edit-username-input').value = "";
         }
+        
+        // パスワードはnullを渡し、saveAccountToLocal側で既存パスワードを維持させる
+        saveAccountToLocal(user.email, userName);
+        
         showScreen('mypage-screen');
         loadUserTeams(); 
     } else {
@@ -83,12 +89,17 @@ auth.onAuthStateChanged(async (user) => {
     }
 });
 
+/**
+ * 🌟 ログイン処理（ログイン成功時にパスワードを記憶）
+ */
 async function loginAccount() {
     const email = document.getElementById('login-email-input').value;
     const password = document.getElementById('login-password-input').value;
     if(!email || !password) return alert("メールアドレスとパスワードを入力してください");
     try {
         await auth.signInWithEmailAndPassword(email, password);
+        // 🌟 ログイン成功時にパスワードを記憶させる
+        saveAccountToLocal(email, "名称未設定", password);
     } catch(error) {
         if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-login-credentials') {
             alert("アカウントが見つからないか、パスワードが間違っています。\n初めての方は「新規アカウント登録」から登録してください。");
@@ -98,6 +109,9 @@ async function loginAccount() {
     }
 }
 
+/**
+ * 🌟 新規登録処理（登録成功時にパスワードを記憶）
+ */
 async function registerAccount() {
     const email = document.getElementById('register-email-input').value;
     const password = document.getElementById('register-password-input').value;
@@ -108,6 +122,10 @@ async function registerAccount() {
     try {
         const userCred = await auth.createUserWithEmailAndPassword(email, password);
         await db.collection("users").doc(userCred.user.uid).set({ email: email, name: userName }, { merge: true });
+        
+        // 🌟 登録成功時にパスワードを記憶させる
+        saveAccountToLocal(email, userName, password);
+        
         alert("新規登録が完了しました！");
         document.getElementById('register-email-input').value = "";
         document.getElementById('register-password-input').value = "";
@@ -162,6 +180,10 @@ async function updateUserName() {
     if (!newName) return alert("表示名を入力してください");
     try {
         await db.collection("users").doc(currentUser.uid).update({ name: newName });
+        
+        // 🌟 記憶している名前も更新
+        saveAccountToLocal(currentUser.email, newName);
+        
         alert("表示名を更新しました！");
     } catch (e) { alert("更新に失敗しました: " + e.message); }
 }
@@ -891,7 +913,6 @@ function changeGameYear(year) {
 
 function renderGameList() {
     const container = document.getElementById('game-list-container');
-    const scoreContainer = document.getElementById('score-game-list-container');
     if(!container) return;
     
     // 全試合から年のリストを取得
@@ -903,8 +924,6 @@ function renderGameList() {
 
     const gSelect = document.getElementById('game-year-select');
     if(gSelect) gSelect.innerHTML = optionsHtml;
-    const sSelect = document.getElementById('score-year-select');
-    if(sSelect) sSelect.innerHTML = optionsHtml;
 
     // 表示年で絞り込み
     const targetGames = games.filter(g => {
@@ -915,18 +934,17 @@ function renderGameList() {
     const emptyMsg = '<p class="empty-message">対象の試合がありません</p>';
     if(targetGames.length === 0) {
         container.innerHTML = emptyMsg;
-        if(scoreContainer) scoreContainer.innerHTML = emptyMsg;
         return;
     }
 
     const sortedGames = [...targetGames].sort((a, b) => new Date(b.date) - new Date(a.date));
 
-    // 🌟 試合管理タブの描画
+    // 🌟 1つのカードにすべてのボタンを統合して描画
     container.innerHTML = sortedGames.map(g => {
         const resultText = g.isFinished ? (g.score.us > g.score.them ? ' (勝)' : g.score.us < g.score.them ? ' (敗)' : ' (分)') : ' (未完了)';
         const weatherIcon = g.weather === '晴れ' ? '☀️' : g.weather === '曇り' ? '☁️' : g.weather === '雨' ? '☔' : '❓';
         const pCount = g.participants ? g.participants.length : 0; 
-        const deleteBtnHtml = isGameDeleteMode ? `<button class="btn-delete-game mt-10 w-100 admin-only" onclick="deleteGame(${g.id})">この試合を削除</button>` : '';
+        const deleteBtnHtml = isGameDeleteMode ? `<button class="btn-delete-game mt-15 w-100 admin-only" onclick="deleteGame(${g.id})">この試合を削除</button>` : '';
 
         return `
             <div id="game-card-${g.id}" class="game-card accordion-card">
@@ -941,57 +959,28 @@ function renderGameList() {
                     <div class="game-detail-text">👥 参加: ${pCount}名</div>
                     <div class="game-detail-text score-text mt-10">スコア: ${g.score.us} - ${g.score.them}${resultText}</div>
                     
-                    <div class="game-card-btns mt-15">
+                    <div class="flex-gap-8 mt-15">
                         <button class="btn-small-action btn-small-blue flex-1 p-10" onclick="showLineupModal(${g.id})">スタメン・打順</button>
                         <button class="btn-small-action btn-small-gray flex-1 p-10 admin-only" onclick="showAddGameModal(${g.id})">試合情報の編集</button>
                     </div>
-                    ${deleteBtnHtml}
-                </div>
-            </div>`;
-    }).join('');
 
-    // 🌟 スコア入力タブの描画（アコーディオン化）
-    if(scoreContainer) {
-        scoreContainer.innerHTML = sortedGames.map(g => {
-            const weatherIcon = g.weather === '晴れ' ? '☀️' : g.weather === '曇り' ? '☁️' : g.weather === '雨' ? '☔' : '❓';
-            const pCount = g.participants ? g.participants.length : 0;
-            const resultText = g.isFinished ? (g.score.us > g.score.them ? ' (勝)' : g.score.us < g.score.them ? ' (敗)' : ' (分)') : ' (未完了)';
-
-            return `
-            <div id="score-card-${g.id}" class="game-card accordion-card">
-                <div class="game-accordion-header" onclick="toggleScoreAccordion(${g.id})">
-                    <div class="game-date-text">📅 ${g.date} (${g.side})</div>
-                    <div class="game-opponent-text">vs ${g.opponent}</div>
-                </div>
-                
-                <div class="game-accordion-body">
-                    <div class="game-detail-text">☁️ 天気: ${g.weather}</div>
-                    <div class="game-detail-text">📍 場所: ${g.location}</div>
-                    <div class="game-detail-text">👥 参加: ${pCount}名</div>
-                    <p class="score-text large mt-10">スコア: ${g.score.us} - ${g.score.them}${resultText}</p>
-                    
-                    <div class="score-action-container mt-15">
+                    <div class="score-action-container mt-10">
                         <button class="btn-small-action btn-small-green w-100 p-10" onclick="showScoreInputModal(${g.id})">イニングスコアボード</button>
                         <div class="flex-gap-8">
                             <button class="btn-small-action btn-small-orange flex-1 p-10" onclick="showAtBatMatrixModal(${g.id})">打席成績</button>
                             <button class="btn-small-action btn-small-purple flex-1 p-10" onclick="showPitcherModal(${g.id})">投手成績</button>
                         </div>
                     </div>
+                    
+                    ${deleteBtnHtml}
                 </div>
             </div>`;
-        }).join('');
-    }
+    }).join('');
 }
 
 // 試合管理用のアコーディオン開閉
 function toggleGameAccordion(id) {
     const card = document.getElementById(`game-card-${id}`);
-    if (card) card.classList.toggle('open');
-}
-
-// 🌟 新規追加：スコア入力用のアコーディオン開閉
-function toggleScoreAccordion(id) {
-    const card = document.getElementById(`score-card-${id}`);
     if (card) card.classList.toggle('open');
 }
 
@@ -1456,27 +1445,25 @@ function showHelpModal(pageId) {
                     <p>・選手ごとのステータス（現役・活動休止中・OB/OG）も設定可能です。</p>
                 </div>`
         },
+        // 🌟 ここに「スコア入力」の使い方を統合しました
         game: {
-            title: "試合管理の使い方",
+            title: "試合管理・スコア入力の使い方",
             content: `
                 <div class="help-content-modal">
-                    <p>・試合のスケジュールと<strong>当日のスタメン</strong>を登録します。</p>
-                    <p>・まずは「新規試合登録」から対戦相手や参加者を登録してください。</p>
-                    <p>・次に、青い「スタメン・打順」ボタンを押してオーダーを組みます。</p>
-                </div>`
-        },
-        score: {
-            title: "スコア入力の使い方",
-            content: `
-                <div class="help-content-modal">
-                    <p>・試合中の<strong>結果入力（スコアブック）</strong>を行うページです。</p>
+                    <p>試合の予定作成から、<strong>当日のスタメン登録、スコア入力まで</strong>をすべてこの画面で行います。</p>
+                    
+                    <p style="color: var(--grass-green); font-weight: bold; margin-top: 15px;">【1. 試合の準備】</p>
+                    <p>・「新規試合登録」から対戦相手や参加者を登録します。</p>
+                    <p>・試合のカードをタップして開き、「スタメン・打順」ボタンからオーダーを組みます。</p>
+                    
+                    <p style="color: var(--score-blue); font-weight: bold; margin-top: 15px;">【2. スコアの入力】</p>
                     <p>・<strong>打席成績：</strong>表のマス目をタップして結果を入力します。</p>
                     <p>・<strong>投手成績：</strong>登板した投手の投球回や自責点を入力します。</p>
-                    <p>・試合が終わったら「イニングスコアボード」を開き、<strong>『この試合を終了とする』にチェックを入れて保存</strong>してください。成績に反映されます。</p>
+                    <p>・試合が終わったら「イニングスコアボード」を開き、<strong>『この試合を終了とする』にチェックを入れて保存</strong>してください。これで通算成績にデータが反映されます。</p>
                 </div>`
         },
         stats: {
-            title: "成績表示の使い方",
+            title: "成績の使い方",
             content: `
                 <div class="help-content-modal">
                     <p>・「終了済」になった試合のデータから、<strong>個人の打撃成績と投手成績を自動で計算</strong>して表示します。</p>
@@ -1484,8 +1471,10 @@ function showHelpModal(pageId) {
                 </div>`
         }
     };
+    
     const data = helpData[pageId];
     if (!data) return;
+    
     document.getElementById('modal-title').innerText = data.title;
     document.getElementById('modal-body').innerHTML = data.content;
     document.getElementById('modal-overlay').style.display = 'flex';
@@ -1658,4 +1647,117 @@ function closeModal() {
     if (modal) modal.style.display = 'none';
     currentEditingPlayerId = null;
     currentGameForScore = null;
+}
+
+/**
+ * 🌟 アカウント情報の保存（パスワード対応版）
+ */
+function saveAccountToLocal(email, name, password = null) {
+    if (!email) return;
+    let accounts = JSON.parse(localStorage.getItem('savedAccounts') || '[]');
+    
+    // 既存のデータがあればパスワードを引き継ぐ
+    let existing = accounts.find(a => a.email === email);
+    let savedPassword = password || (existing ? existing.password : null);
+    
+    accounts = accounts.filter(a => a.email !== email); // 重複削除
+    accounts.push({ email, name, password: savedPassword });
+    localStorage.setItem('savedAccounts', JSON.stringify(accounts));
+}
+
+// 保存されたアカウント情報を取得
+function getSavedAccounts() {
+    return JSON.parse(localStorage.getItem('savedAccounts') || '[]');
+}
+
+// 保存リストから削除
+function removeSavedAccount(email) {
+    let accounts = JSON.parse(localStorage.getItem('savedAccounts') || '[]');
+    accounts = accounts.filter(a => a.email !== email);
+    localStorage.setItem('savedAccounts', JSON.stringify(accounts));
+    showSwitchAccountModal(); // 画面を再描画
+}
+
+/**
+ * 🌟 アカウント切替モーダルの表示（ワンタップ用）
+ */
+function showSwitchAccountModal() {
+    const accounts = getSavedAccounts();
+    const currentEmail = currentUser ? currentUser.email : "";
+
+    let listHtml = accounts.map(acc => {
+        const isCurrent = acc.email === currentEmail;
+        if (isCurrent) {
+            return `
+                <div class="account-switch-item current">
+                    <div>
+                        <div class="account-name">${acc.name} <span class="admin-badge" style="background:#4caf50;">ログイン中</span></div>
+                        <div class="account-email">${acc.email}</div>
+                    </div>
+                </div>
+            `;
+        } else {
+            // 🌟 クリック時の関数を quickSwitchAccount に変更
+            return `
+                <div class="account-switch-item" onclick="quickSwitchAccount('${acc.email}')">
+                    <div>
+                        <div class="account-name">${acc.name}</div>
+                        <div class="account-email">${acc.email}</div>
+                    </div>
+                    <button class="btn-remove-account" onclick="event.stopPropagation(); removeSavedAccount('${acc.email}')">✖</button>
+                </div>
+            `;
+        }
+    }).join('');
+
+    if (accounts.length === 0) listHtml = `<p class="help-text text-center p-10">履歴がありません。</p>`;
+
+    document.getElementById('modal-title').innerText = "アカウントの切り替え";
+    document.getElementById('modal-body').innerHTML = `
+        <div class="edit-form">
+            <p class="help-text mb-10">リストをタップするだけで瞬時にアカウントが切り替わります。</p>
+            <div class="account-list-container mb-15">
+                ${listHtml}
+            </div>
+            
+            <button class="btn-small-action btn-small-orange w-100 p-10 mb-10" onclick="logoutAndAddNew()">＋ 別のアカウントで新しくログイン</button>
+            
+            <div class="modal-btns mt-10">
+                <button class="btn-save bg-gray" onclick="closeModal()">閉じる</button>
+            </div>
+        </div>
+    `;
+    document.getElementById('modal-overlay').style.display = 'flex';
+}
+
+/**
+ * 🌟 パスワードなしで瞬時に切り替える全自動ログイン処理
+ */
+async function quickSwitchAccount(email) {
+    const accounts = getSavedAccounts();
+    const target = accounts.find(a => a.email === email);
+    
+    let password = target ? target.password : null;
+    
+    // 過去のデータ（パスワード保存機能追加前）などでパスワードがない場合のみ手動入力させる
+    if (!password) {
+        password = prompt(`アカウント「${email}」のパスワードを入力してください:`);
+        if (!password) return;
+    }
+
+    try {
+        await auth.signInWithEmailAndPassword(email, password);
+        // ログイン成功時にパスワードを確実に保存
+        saveAccountToLocal(email, target ? target.name : "名称未設定", password);
+        alert("アカウントを切り替えました！");
+        closeModal();
+    } catch (e) {
+        alert("自動ログインに失敗しました。パスワードが変わっている可能性があります。\nリストから一度✖で削除し、再度ログインし直してください。");
+    }
+}
+
+// まだリストにない新しいアカウントを追加するためのログアウト処理
+function logoutAndAddNew() {
+    closeModal();
+    auth.signOut();
 }
