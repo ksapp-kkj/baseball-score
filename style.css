@@ -764,8 +764,8 @@ th {
     display: none !important;
 }
 
-.viewer-mode input,
-.viewer-mode select {
+.viewer-mode input:not(.filter-select):not(.record-year-select),
+.viewer-mode select:not(.filter-select):not(.record-year-select) {
     pointer-events: none !important;
     background-color: #f5f5f5 !important;
     color: #666 !important;
@@ -902,4 +902,19 @@ input[type="checkbox"] {
 .game-detail-text {
     font-size: 0.95rem;
     margin-bottom: 5px;
+}
+
+/* 🌟 スマホでも監督・主将の入力候補（datalist）に「▼」を表示する */
+input[list] {
+    /* 自作の「▼」アイコンを背景として設定 */
+    background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23999"><path d="M7 10l5 5 5-5z"/></svg>');
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 24px;
+    padding-right: 35px; /* アイコンと文字が被らないように余白を確保 */
+}
+
+/* PCブラウザなどで標準の矢印と二重になるのを防ぐ */
+input[list]::-webkit-calendar-picker-indicator {
+    opacity: 0;
 }
