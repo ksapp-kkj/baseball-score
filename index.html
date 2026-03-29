@@ -59,6 +59,7 @@
         <div class="mypage-wrapper">
             <div class="list-header">
                 <h2>マイページ</h2>
+                <button class="btn-small-action btn-small-blue p-10" onclick="showSwitchAccountModal()">🔄 アカウント切替</button>
                 <button class="btn-edit-mode" onclick="logout()">ログアウト</button>
             </div>
             
@@ -108,7 +109,6 @@
             <div class="nav-menu">
                 <div class="nav-item active" data-target="team-page">チーム情報</div>
                 <div class="nav-item" data-target="game-page">試合情報</div>
-                <div class="nav-item" data-target="score-page">スコア入力</div>
                 <div class="nav-item" data-target="stats-page">成績</div>
             </div>
         </nav>
@@ -178,21 +178,6 @@
                 </div>
                 
                 <div id="game-list-container">
-                    <p class="empty-message">試合が登録されていません</p>
-                </div>
-            </section>
-
-            <section id="score-page" class="content-section">
-                <h2>スコア入力 <span class="help-trigger" onclick="showHelpModal('score')">❓使い方</span></h2>
-
-                <div class="filter-container">
-                    <label class="filter-label">表示年:</label>
-                    <select id="score-year-select" class="filter-select" onchange="changeGameYear(this.value)">
-                        <option value="all">通算</option>
-                    </select>
-                </div>
-                
-                <div id="score-game-list-container">
                     <p class="empty-message">試合が登録されていません</p>
                 </div>
             </section>
