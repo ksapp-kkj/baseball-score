@@ -68,17 +68,11 @@ auth.onAuthStateChanged(async (user) => {
     if (user) {
         currentUser = user;
         const uDoc = await db.collection("users").doc(user.uid).get();
-        let userName = "名称未設定";
         if (uDoc.exists && uDoc.data().name) {
-            userName = uDoc.data().name;
-            document.getElementById('edit-username-input').value = userName;
+            document.getElementById('edit-username-input').value = uDoc.data().name;
         } else {
             document.getElementById('edit-username-input').value = "";
         }
-        
-        // パスワードはnullを渡し、saveAccountToLocal側で既存パスワードを維持させる
-        saveAccountToLocal(user.email, userName);
-        
         showScreen('mypage-screen');
         loadUserTeams(); 
     } else {
@@ -98,8 +92,6 @@ async function loginAccount() {
     if(!email || !password) return alert("メールアドレスとパスワードを入力してください");
     try {
         await auth.signInWithEmailAndPassword(email, password);
-        // 🌟 ログイン成功時にパスワードを記憶させる
-        saveAccountToLocal(email, "名称未設定", password);
     } catch(error) {
         if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-login-credentials') {
             alert("アカウントが見つからないか、パスワードが間違っています。\n初めての方は「新規アカウント登録」から登録してください。");
@@ -122,10 +114,6 @@ async function registerAccount() {
     try {
         const userCred = await auth.createUserWithEmailAndPassword(email, password);
         await db.collection("users").doc(userCred.user.uid).set({ email: email, name: userName }, { merge: true });
-        
-        // 🌟 登録成功時にパスワードを記憶させる
-        saveAccountToLocal(email, userName, password);
-        
         alert("新規登録が完了しました！");
         document.getElementById('register-email-input').value = "";
         document.getElementById('register-password-input').value = "";
@@ -180,10 +168,6 @@ async function updateUserName() {
     if (!newName) return alert("表示名を入力してください");
     try {
         await db.collection("users").doc(currentUser.uid).update({ name: newName });
-        
-        // 🌟 記憶している名前も更新
-        saveAccountToLocal(currentUser.email, newName);
-        
         alert("表示名を更新しました！");
     } catch (e) { alert("更新に失敗しました: " + e.message); }
 }
@@ -1647,117 +1631,4 @@ function closeModal() {
     if (modal) modal.style.display = 'none';
     currentEditingPlayerId = null;
     currentGameForScore = null;
-}
-
-/**
- * 🌟 アカウント情報の保存（パスワード対応版）
- */
-function saveAccountToLocal(email, name, password = null) {
-    if (!email) return;
-    let accounts = JSON.parse(localStorage.getItem('savedAccounts') || '[]');
-    
-    // 既存のデータがあればパスワードを引き継ぐ
-    let existing = accounts.find(a => a.email === email);
-    let savedPassword = password || (existing ? existing.password : null);
-    
-    accounts = accounts.filter(a => a.email !== email); // 重複削除
-    accounts.push({ email, name, password: savedPassword });
-    localStorage.setItem('savedAccounts', JSON.stringify(accounts));
-}
-
-// 保存されたアカウント情報を取得
-function getSavedAccounts() {
-    return JSON.parse(localStorage.getItem('savedAccounts') || '[]');
-}
-
-// 保存リストから削除
-function removeSavedAccount(email) {
-    let accounts = JSON.parse(localStorage.getItem('savedAccounts') || '[]');
-    accounts = accounts.filter(a => a.email !== email);
-    localStorage.setItem('savedAccounts', JSON.stringify(accounts));
-    showSwitchAccountModal(); // 画面を再描画
-}
-
-/**
- * 🌟 アカウント切替モーダルの表示（ワンタップ用）
- */
-function showSwitchAccountModal() {
-    const accounts = getSavedAccounts();
-    const currentEmail = currentUser ? currentUser.email : "";
-
-    let listHtml = accounts.map(acc => {
-        const isCurrent = acc.email === currentEmail;
-        if (isCurrent) {
-            return `
-                <div class="account-switch-item current">
-                    <div>
-                        <div class="account-name">${acc.name} <span class="admin-badge" style="background:#4caf50;">ログイン中</span></div>
-                        <div class="account-email">${acc.email}</div>
-                    </div>
-                </div>
-            `;
-        } else {
-            // 🌟 クリック時の関数を quickSwitchAccount に変更
-            return `
-                <div class="account-switch-item" onclick="quickSwitchAccount('${acc.email}')">
-                    <div>
-                        <div class="account-name">${acc.name}</div>
-                        <div class="account-email">${acc.email}</div>
-                    </div>
-                    <button class="btn-remove-account" onclick="event.stopPropagation(); removeSavedAccount('${acc.email}')">✖</button>
-                </div>
-            `;
-        }
-    }).join('');
-
-    if (accounts.length === 0) listHtml = `<p class="help-text text-center p-10">履歴がありません。</p>`;
-
-    document.getElementById('modal-title').innerText = "アカウントの切り替え";
-    document.getElementById('modal-body').innerHTML = `
-        <div class="edit-form">
-            <p class="help-text mb-10">リストをタップするだけで瞬時にアカウントが切り替わります。</p>
-            <div class="account-list-container mb-15">
-                ${listHtml}
-            </div>
-            
-            <button class="btn-small-action btn-small-orange w-100 p-10 mb-10" onclick="logoutAndAddNew()">＋ 別のアカウントで新しくログイン</button>
-            
-            <div class="modal-btns mt-10">
-                <button class="btn-save bg-gray" onclick="closeModal()">閉じる</button>
-            </div>
-        </div>
-    `;
-    document.getElementById('modal-overlay').style.display = 'flex';
-}
-
-/**
- * 🌟 パスワードなしで瞬時に切り替える全自動ログイン処理
- */
-async function quickSwitchAccount(email) {
-    const accounts = getSavedAccounts();
-    const target = accounts.find(a => a.email === email);
-    
-    let password = target ? target.password : null;
-    
-    // 過去のデータ（パスワード保存機能追加前）などでパスワードがない場合のみ手動入力させる
-    if (!password) {
-        password = prompt(`アカウント「${email}」のパスワードを入力してください:`);
-        if (!password) return;
-    }
-
-    try {
-        await auth.signInWithEmailAndPassword(email, password);
-        // ログイン成功時にパスワードを確実に保存
-        saveAccountToLocal(email, target ? target.name : "名称未設定", password);
-        alert("アカウントを切り替えました！");
-        closeModal();
-    } catch (e) {
-        alert("自動ログインに失敗しました。パスワードが変わっている可能性があります。\nリストから一度✖で削除し、再度ログインし直してください。");
-    }
-}
-
-// まだリストにない新しいアカウントを追加するためのログアウト処理
-function logoutAndAddNew() {
-    closeModal();
-    auth.signOut();
 }
