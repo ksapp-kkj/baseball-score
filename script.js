@@ -725,40 +725,81 @@ function deletePlayer(id) {
 }
 
 function renderPlayerList() {
-    const body = document.getElementById('player-list-body');
-    if (!body) return;
+    const container = document.getElementById('player-list-container');
+    if (!container) return;
 
     let html = "";
     const statuses = ["現役", "活動休止中", "OB・OG"];
 
-    statuses.forEach(status => {
+    statuses.forEach((status, index) => {
         const group = players.filter(p => (p.status || "現役") === status);
+        
         if (group.length > 0) {
-            html += `<tr class="status-header"><td colspan="4">${status}</td></tr>`;
+            // 🌟 現役だけ最初から開いておき、OB・OGなどは閉じておく
+            const isOpen = status === "現役" ? "open" : "";
+            
             const sortedGroup = group.sort((a, b) => {
                 const numA = (a.number === "無" || a.number === "") ? Infinity : parseFloat(a.number);
                 const numB = (b.number === "無" || b.number === "") ? Infinity : parseFloat(b.number);
                 return numA - numB;
             });
+            
+            // 🌟 インラインスタイルを排除し、CSSクラスを適用
+            html += `
+                <div id="player-accordion-${index}" class="accordion-card ${isOpen} mb-10">
+                    <div class="game-accordion-header" onclick="togglePlayerAccordion(${index})">
+                        <div class="player-status-header">
+                            ${status} <span class="player-status-count">(${group.length}名)</span>
+                        </div>
+                    </div>
+                    
+                    <div class="game-accordion-body player-accordion-body">
+                        <div class="table-container table-container-flat">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>背番号</th>
+                                        <th>氏名</th>
+                                        <th>投打</th>
+                                        <th>守備</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+            `;
+            
             sortedGroup.forEach(p => {
                 html += `<tr><td>${p.number}</td><td><span class="name-link" onclick="showPlayerDetail('${p.id}')">${p.name}</span></td><td>${p.side}</td><td>${p.mainPos}</td></tr>`;
             });
+            
+            html += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
         }
     });
-    body.innerHTML = html;
+    
+    container.innerHTML = html;
 
-    // 🌟 修正：監督・主将の入力候補（datalist）を「背番号順」で更新
+    // 監督・主将の入力候補（datalist）の更新処理
     const datalist = document.getElementById('team-members-list');
     if (datalist) {
-        // 全選手を背番号順に並び替え（「無」は一番下へ）
         const sortedAllPlayers = [...players].sort((a, b) => {
             const numA = (a.number === "無" || a.number === "") ? Infinity : parseFloat(a.number);
             const numB = (b.number === "無" || b.number === "") ? Infinity : parseFloat(b.number);
             return numA - numB;
         });
-        
-        // 並び替えた配列を使って option を生成
         datalist.innerHTML = sortedAllPlayers.map(p => `<option value="${p.name}"></option>`).join('');
+    }
+}
+
+// 🌟 新規追加：選手一覧用のアコーディオン開閉
+function togglePlayerAccordion(index) {
+    const card = document.getElementById(`player-accordion-${index}`);
+    if (card) {
+        card.classList.toggle('open');
     }
 }
 
