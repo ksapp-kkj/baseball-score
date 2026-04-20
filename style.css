@@ -936,33 +936,62 @@ input[list]::-webkit-calendar-picker-indicator {
     box-shadow: none; /* アコーディオンの中で二重に影が出ないようにする */
 }
 
-/* 🌟 スコア入力のカウンターUI用スタイル */
+/* 🌟 スコア入力のカウンターUI用スタイル（縦型▲▼版） */
 .score-counter {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    min-width: 70px;
+    gap: 5px;
+    min-width: 50px;
 }
-.btn-counter {
-    background: #f5f5f5;
+.score-value {
+    font-size: 1.3rem;
+    font-weight: bold;
+    width: 24px;
+    text-align: center;
+}
+.spinner-btns {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.btn-spinner {
+    background: #f0f0f0;
     border: 1px solid #ccc;
     border-radius: 4px;
     width: 28px;
-    height: 28px;
+    height: 18px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.2rem;
-    font-weight: bold;
-    padding: 0;
+    font-size: 0.65rem;
+    color: #555;
     cursor: pointer;
+    padding: 0;
 }
-.btn-counter.minus { color: var(--danger-color); }
-.btn-counter.plus { color: var(--score-blue); }
-.score-value {
-    font-size: 1.2rem;
-    font-weight: bold;
-    width: 20px;
+.btn-spinner:active {
+    background: #dcdcdc; /* 押した時のフィードバック */
+}
+
+/* 🌟 チーム招待ID表示用のスタイル */
+.team-id-card {
     text-align: center;
+    cursor: pointer;
+    padding: 20px;
+}
+.team-id-box {
+    background: var(--light-grass); /* 薄緑の背景 */
+    padding: 15px;
+    border-radius: 8px;
+    font-weight: bold;
+    color: var(--score-blue);
+}
+.team-id-text {
+    font-size: 1.4rem;
+    letter-spacing: 1px;
+}
+.team-id-subtext {
+    font-size: 0.8rem;
+    color: #666;
+    font-weight: normal;
 }
