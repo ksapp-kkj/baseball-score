@@ -33,11 +33,11 @@ let tempLineup = [];
 let currentAtBatColumns = 5; 
 let currentStatsYear = "all"; 
 let currentRecordYear = "all";
-let currentGameYear = "all"; // 🌟 試合一覧・スコア入力の表示年フィルター用
+let currentGameYear = "all"; 
 let tempParticipants = [];
 let tempPitchers = []; 
 let isGameDeleteMode = false; 
-let unsubscribeTeamSnapshot = null; // 🌟 追加：リアルタイム同期を管理する変数
+let unsubscribeTeamSnapshot = null; 
 
 /**
  * 🌟 画面切り替えの仕組み
@@ -63,7 +63,7 @@ function showLoginForm() {
 }
 
 /**
- * 🌟 onAuthStateChanged の修正（名前更新時にパスワードを消さないようにする）
+ * 🌟 onAuthStateChanged 
  */
 auth.onAuthStateChanged(async (user) => {
     if (user) {
@@ -77,7 +77,6 @@ auth.onAuthStateChanged(async (user) => {
         showScreen('mypage-screen');
         loadUserTeams(); 
     } else {
-        // 🌟 ログアウト時も同期リスナーを確実に追加解除
         if (unsubscribeTeamSnapshot) {
             unsubscribeTeamSnapshot();
             unsubscribeTeamSnapshot = null;
@@ -91,7 +90,7 @@ auth.onAuthStateChanged(async (user) => {
 });
 
 /**
- * 🌟 ログイン処理（ログイン成功時にパスワードを記憶）
+ * 🌟 ログイン処理
  */
 async function loginAccount() {
     const email = document.getElementById('login-email-input').value;
@@ -109,7 +108,7 @@ async function loginAccount() {
 }
 
 /**
- * 🌟 新規登録処理（登録成功時にパスワードを記憶）
+ * 🌟 新規登録処理
  */
 async function registerAccount() {
     const email = document.getElementById('register-email-input').value;
@@ -298,12 +297,10 @@ async function selectTeam(teamId, teamName) {
     document.getElementById('current-team-display').innerText = teamName;
     document.getElementById('team-id-display').innerHTML = `ID: ${teamId}<br><span class="copy-text">(タップでコピー)</span>`;
 
-    // 🌟 以前のチームの同期リスナーが残っていれば解除する
     if (unsubscribeTeamSnapshot) {
         unsubscribeTeamSnapshot();
     }
 
-    // 🌟 .get() ではなく .onSnapshot() を使い、データの変更を常に監視する
     unsubscribeTeamSnapshot = db.collection("teams").doc(teamId).onSnapshot((doc) => {
         if (doc.exists) {
             const data = doc.data();
@@ -322,22 +319,19 @@ async function selectTeam(teamId, teamName) {
                 if(manageBtn) manageBtn.classList.add('hidden');
             }
 
-            // 🌟 データを最新のものに更新
             players = data.players || [];
             games = data.games || [];
             document.getElementById('team-name-input').value = data.team_name || teamName;
             document.getElementById('manager-name-input').value = data.manager_name || "";
             document.getElementById('captain-name-input').value = data.captain_name || "";
 
-            // 🌟 モーダル編集中に裏側のデータが更新された場合の保護（先祖返り防止）
             if (currentGameForScore) {
                 const updatedGame = games.find(g => g.id === currentGameForScore.id);
                 if (updatedGame) {
-                    currentGameForScore = updatedGame; // 常に最新の試合データを保持
+                    currentGameForScore = updatedGame; 
                 }
             }
 
-            // 🌟 画面を最新の状態で再描画
             renderPlayerList();
             renderGameList();
             updateTeamRecord();
@@ -351,7 +345,6 @@ async function selectTeam(teamId, teamName) {
 }
 
 function backToMyPage() {
-    // 🌟 マイページに戻る時は同期リスナーを解除
     if (unsubscribeTeamSnapshot) {
         unsubscribeTeamSnapshot();
         unsubscribeTeamSnapshot = null;
@@ -512,7 +505,7 @@ function convertToKatakana(str) {
 }
 
 /**
- * 🌟 選手情報管理（強化版ID・ステータス管理）
+ * 🌟 選手情報管理
  */
 function showAddPlayerModal() {
     document.getElementById('modal-title').innerText = "選手登録";
@@ -560,12 +553,10 @@ function addPlayer() {
     if(!lastName || !firstName) return alert("苗字と名前を両方入力してください");
     const fullName = lastName + " " + firstName;
 
-    // 🌟 フリガナを取得し、半角スペースで結合
     const furiLast = document.getElementById('p-furigana-last').value.trim();
     const furiFirst = document.getElementById('p-furigana-first').value.trim();
     let furigana = "";
     if (furiLast || furiFirst) {
-        // どちらか片方だけ入力された場合も考慮して trim() をかける
         furigana = (furiLast + " " + furiFirst).trim();
         if (!/^[ァ-ヶー・\s　]+$/.test(furigana)) {
             return alert("エラー：フリガナは「全角カタカナ」のみ入力してください。");
@@ -591,7 +582,7 @@ function addPlayer() {
         number: numberToSave,
         pastNumbers: [],
         name: fullName,      
-        furigana: furigana,  // 🌟 半角スペースで結合されたフリガナを保存
+        furigana: furigana,  
         side: document.getElementById('p-side').value,
         mainPos: mainPos,
         subPos: Array.from(document.querySelectorAll('input[name="sub-pos"]:checked')).map(cb => cb.value),
@@ -720,7 +711,6 @@ function updatePlayer() {
     if(!lastName || !firstName) return alert("苗字と名前を両方入力してください");
     p.name = lastName + " " + firstName;
 
-    // 🌟 フリガナの取得と結合
     const furiLast = document.getElementById('edit-furigana-last').value.trim();
     const furiFirst = document.getElementById('edit-furigana-first').value.trim();
     let furigana = "";
@@ -745,19 +735,14 @@ function updatePlayer() {
 function deletePlayer(id) {
     if (!checkAdmin()) return;
     
-    // 🌟 警告メッセージ1 (キャンセルならここで処理終了)
     if(!confirm("削除して良いですか？了解は取れていますか？\n（※通常はステータス「活動休止中」および「OB・OG」への変更を推奨しています）")) {
         return;
     }
 
-    // 削除の実行
     players = players.filter(p => String(p.id) !== String(id));
     saveAndRefreshPlayers();
     
-    // 🌟 警告メッセージ2（事後通知）
     alert("削除しました。可能な限り、本人にお伝えください。");
-    
-    // モーダルを閉じてチーム情報画面へ戻る
     closeModal();
 }
 
@@ -772,7 +757,6 @@ function renderPlayerList() {
         const group = players.filter(p => (p.status || "現役") === status);
         
         if (group.length > 0) {
-            // 🌟 現役だけ最初から開いておき、OB・OGなどは閉じておく
             const isOpen = status === "現役" ? "open" : "";
             
             const sortedGroup = group.sort((a, b) => {
@@ -781,7 +765,6 @@ function renderPlayerList() {
                 return numA - numB;
             });
             
-            // 🌟 インラインスタイルを排除し、CSSクラスを適用
             html += `
                 <div id="player-accordion-${index}" class="accordion-card ${isOpen} mb-10">
                     <div class="game-accordion-header" onclick="togglePlayerAccordion(${index})">
@@ -820,7 +803,6 @@ function renderPlayerList() {
     
     container.innerHTML = html;
 
-    // 監督・主将の入力候補（datalist）の更新処理
     const datalist = document.getElementById('team-members-list');
     if (datalist) {
         const sortedAllPlayers = [...players].sort((a, b) => {
@@ -832,7 +814,6 @@ function renderPlayerList() {
     }
 }
 
-// 🌟 新規追加：選手一覧用のアコーディオン開閉
 function togglePlayerAccordion(index) {
     const card = document.getElementById(`player-accordion-${index}`);
     if (card) {
@@ -856,13 +837,12 @@ function toggleDeleteMode() {
 function showAddGameModal(gameId = null) {
     const isEdit = gameId !== null;
     
-    // 🌟 変更：現役選手だけを抽出してデフォルト参加者にする
     const activePlayerIds = players.filter(p => (p.status || "現役") === "現役").map(p => String(p.id));
 
     const g = isEdit ? games.find(game => game.id === gameId) : {
         date: new Date().toISOString().split('T')[0],
         opponent: "", location: "", weather: "晴れ", side: "先攻", 
-        participants: activePlayerIds // 🌟 ここを適用
+        participants: activePlayerIds
     };
     tempParticipants = g.participants ? [...g.participants] : activePlayerIds;
 
@@ -967,7 +947,6 @@ function processGame(gameId) {
     closeModal();
 }
 
-// 🌟 試合一覧・スコア入力の年フィルター処理
 function changeGameYear(year) {
     currentGameYear = year;
     renderGameList();
@@ -977,17 +956,14 @@ function renderGameList() {
     const container = document.getElementById('game-list-container');
     if(!container) return;
     
-    // 全試合から年のリストを取得
     const years = [...new Set(games.map(g => g.date.substring(0, 4)))].sort((a, b) => b - a);
 
-    // フィルターの選択肢を更新
     const optionsHtml = `<option value="all" ${currentGameYear==='all'?'selected':''}>通算</option>` +
         years.map(y => `<option value="${y}" ${currentGameYear===String(y)?'selected':''}>${y}年</option>`).join('');
 
     const gSelect = document.getElementById('game-year-select');
     if(gSelect) gSelect.innerHTML = optionsHtml;
 
-    // 表示年で絞り込み
     const targetGames = games.filter(g => {
         if (currentGameYear === "all") return true;
         return g.date.substring(0, 4) === currentGameYear;
@@ -1001,7 +977,6 @@ function renderGameList() {
 
     const sortedGames = [...targetGames].sort((a, b) => new Date(b.date) - new Date(a.date));
 
-    // 🌟 1つのカードにすべてのボタンを統合して描画
     container.innerHTML = sortedGames.map(g => {
         const resultText = g.isFinished ? (g.score.us > g.score.them ? ' (勝)' : g.score.us < g.score.them ? ' (敗)' : ' (分)') : ' (未完了)';
         const weatherIcon = g.weather === '晴れ' ? '☀️' : g.weather === '曇り' ? '☁️' : g.weather === '雨' ? '☔' : '❓';
@@ -1040,13 +1015,6 @@ function renderGameList() {
     }).join('');
 }
 
-// 試合管理用のアコーディオン開閉
-function toggleGameAccordion(id) {
-    const card = document.getElementById(`game-card-${id}`);
-    if (card) card.classList.toggle('open');
-}
-
-// 🌟 新規追加：アコーディオンの開閉を切り替える関数
 function toggleGameAccordion(id) {
     const card = document.getElementById(`game-card-${id}`);
     if (card) {
@@ -1352,31 +1320,64 @@ function removeInning() {
 function renderScoreBoardTable() {
     const g = currentGameForScore;
     const headerHtml = g.innings.map((_, i) => `<th>${i + 1}</th>`).join('');
-    const usHtml = g.innings.map((inning, i) => `<td><input type="number" min="0" class="score-input" value="${inning.us}" oninput="updateInningScore(${i}, 'us', this.value)"></td>`).join('');
-    const themHtml = g.innings.map((inning, i) => `<td><input type="number" min="0" class="score-input" value="${inning.them}" oninput="updateInningScore(${i}, 'them', this.value)"></td>`).join('');
+
+    // 🌟 閲覧権限の確認
+    const isAdmin = currentTeamAdmins.includes(currentUser.uid);
+
+    // 🌟 カウンターを生成する関数（手入力を廃止し、＋/－ボタンに変更）
+    const createCounterHtml = (index, team, value) => {
+        const valStr = (value === "" || value === undefined) ? "0" : value;
+        if (!isAdmin) return `<span class="score-value">${valStr}</span>`; // 閲覧モード時は数字のみ
+
+        return `
+            <div class="score-counter">
+                <button class="btn-counter minus" onclick="adjustInningScore(${index}, '${team}', -1)">-</button>
+                <span class="score-value">${valStr}</span>
+                <button class="btn-counter plus" onclick="adjustInningScore(${index}, '${team}', 1)">+</button>
+            </div>
+        `;
+    };
+
+    const usCells = g.innings.map((inning, i) => `<td>${createCounterHtml(i, 'us', inning.us)}</td>`).join('');
+    const themCells = g.innings.map((inning, i) => `<td>${createCounterHtml(i, 'them', inning.them)}</td>`).join('');
+
     let totalUs = g.innings.reduce((sum, inn) => sum + (parseInt(inn.us) || 0), 0);
     let totalThem = g.innings.reduce((sum, inn) => sum + (parseInt(inn.them) || 0), 0);
+
+    // 🌟 先攻・後攻の判定と行の入れ替え
+    const isUsBattingFirst = g.side === "先攻";
+    const themSide = isUsBattingFirst ? "後攻" : "先攻";
+
+    // 自チームと相手チームの行HTMLを作成
+    const usRow = `<tr><td class="team-name">自チーム<br><span class="player-pos-sub">(${g.side})</span></td>${usCells}<td id="score-total-us" class="score-total">${totalUs}</td></tr>`;
+    const themRow = `<tr><td class="team-name">相手<br><span class="player-pos-sub">(${themSide})</span></td>${themCells}<td id="score-total-them" class="score-total">${totalThem}</td></tr>`;
+
+    // 🌟 必ず「先攻」が上（表）、「後攻」が下（裏）になるように並べ替える
+    const tbodyHtml = isUsBattingFirst ? (usRow + themRow) : (themRow + usRow);
 
     document.getElementById('score-board-wrapper').innerHTML = `
         <div class="score-table-container">
             <table class="score-table">
                 <thead><tr><th class="team-name">チーム</th>${headerHtml}<th>計</th></tr></thead>
                 <tbody>
-                    <tr><td class="team-name">自チーム</td>${usHtml}<td id="score-total-us" class="score-total">${totalUs}</td></tr>
-                    <tr><td class="team-name">相手</td>${themHtml}<td id="score-total-them" class="score-total">${totalThem}</td></tr>
+                    ${tbodyHtml}
                 </tbody>
             </table>
         </div>
     `;
 }
 
-function updateInningScore(index, team, value) {
-    if (value !== "" && parseInt(value) < 0) { value = ""; currentGameForScore.innings[index][team] = value; renderScoreBoardTable(); return; }
-    currentGameForScore.innings[index][team] = value;
-    let totalUs = currentGameForScore.innings.reduce((sum, inn) => sum + (parseInt(inn.us) || 0), 0);
-    let totalThem = currentGameForScore.innings.reduce((sum, inn) => sum + (parseInt(inn.them) || 0), 0);
-    document.getElementById('score-total-us').innerText = totalUs;
-    document.getElementById('score-total-them').innerText = totalThem;
+// 🌟 新規追加：＋/－ボタンでスコアを増減させる関数
+function adjustInningScore(index, team, delta) {
+    if (!checkAdmin()) return;
+    const currentVal = parseInt(currentGameForScore.innings[index][team]) || 0;
+    let newVal = currentVal + delta;
+    
+    // スコアがマイナスにならないようにブロック
+    if (newVal < 0) newVal = 0; 
+    
+    currentGameForScore.innings[index][team] = String(newVal);
+    renderScoreBoardTable(); // 画面を再描画して合計点も更新
 }
 
 function addInning() { currentGameForScore.innings.push({ us: "", them: "" }); renderScoreBoardTable(); }
@@ -1507,7 +1508,6 @@ function showHelpModal(pageId) {
                     <p>・選手ごとのステータス（現役・活動休止中・OB/OG）も設定可能です。</p>
                 </div>`
         },
-        // 🌟 ここに「スコア入力」の使い方を統合しました
         game: {
             title: "試合管理・スコア入力の使い方",
             content: `
@@ -1562,7 +1562,7 @@ function updateTeamRecord() {
         };
         el.parentNode.insertBefore(selectEl, el);
     }
-    // 🌟「年度」から「年」に変更
+    
     selectEl.innerHTML = `<option value="all" ${currentRecordYear==='all'?'selected':''}>通算成績</option>` +
         years.map(y => `<option value="${y}" ${currentRecordYear===String(y)?'selected':''}>${y}年</option>`).join('');
 
@@ -1588,7 +1588,7 @@ function renderStatsPage() {
     const years = [...new Set(finishedGames.map(g => g.date.substring(0, 4)))].sort((a, b) => b - a);
 
     let yearOptionsHtml = `<option value="all" ${currentStatsYear === 'all' ? 'selected' : ''}>通算</option>`;
-    // 🌟「年度」から「年」に変更
+    
     years.forEach(y => { yearOptionsHtml += `<option value="${y}" ${currentStatsYear === String(y) ? 'selected' : ''}>${y}年</option>`; });
 
     const filterHtml = `
