@@ -295,7 +295,10 @@ function copyTeamId() {
 async function selectTeam(teamId, teamName) {
     currentTeamId = teamId;
     document.getElementById('current-team-display').innerText = teamName;
-    document.getElementById('team-id-display').innerHTML = `ID: ${teamId}<br><span class="copy-text">(タップでコピー)</span>`;
+    const idDisplay = document.getElementById('team-id-display');
+    if (idDisplay) {
+        idDisplay.innerHTML = `<span class="team-id-text">${teamId}</span><br><span class="team-id-subtext">(タップでコピー)</span>`;
+    }
 
     if (unsubscribeTeamSnapshot) {
         unsubscribeTeamSnapshot();
@@ -447,7 +450,6 @@ async function transferGM(uid, displayName) {
 
 window.onload = function() {
     setupNavigation();
-    setupBackupUI();
     const teamFields = [
         { id: 'team-name-input', key: 'team_name' },
         { id: 'manager-name-input', key: 'manager_name' },
@@ -1324,16 +1326,18 @@ function renderScoreBoardTable() {
     // 🌟 閲覧権限の確認
     const isAdmin = currentTeamAdmins.includes(currentUser.uid);
 
-    // 🌟 カウンターを生成する関数（手入力を廃止し、＋/－ボタンに変更）
+    // 🌟 カウンターを生成する関数（縦型▲▼ボタン版）
     const createCounterHtml = (index, team, value) => {
         const valStr = (value === "" || value === undefined) ? "0" : value;
         if (!isAdmin) return `<span class="score-value">${valStr}</span>`; // 閲覧モード時は数字のみ
 
         return `
             <div class="score-counter">
-                <button class="btn-counter minus" onclick="adjustInningScore(${index}, '${team}', -1)">-</button>
                 <span class="score-value">${valStr}</span>
-                <button class="btn-counter plus" onclick="adjustInningScore(${index}, '${team}', 1)">+</button>
+                <div class="spinner-btns">
+                    <button class="btn-spinner" onclick="adjustInningScore(${index}, '${team}', 1)">▲</button>
+                    <button class="btn-spinner" onclick="adjustInningScore(${index}, '${team}', -1)">▼</button>
+                </div>
             </div>
         `;
     };
@@ -1417,72 +1421,6 @@ async function saveAndRefreshGames() {
         try { await db.collection("teams").doc(currentTeamId).update({ games: games }); } 
         catch(e) { console.error("試合保存エラー", e); }
     }
-}
-
-/**
- * 🌟 バックアップ・データ管理
- */
-function setupBackupUI() {
-    const teamPage = document.getElementById('team-page');
-    if (!teamPage) return;
-    const backupDiv = document.createElement('div');
-    backupDiv.className = 'card mt-20';
-    backupDiv.innerHTML = `
-        <h3>データ管理（クラウド連携済）</h3>
-        <p class="help-text">データは自動的にクラウドに保存されています。過去にJSON形式で書き出したデータを流し込む場合は「復元」を押してください。</p>
-        <div class="flex-gap-8 mt-15">
-            <button class="btn-small-action btn-small-blue flex-1 p-10 admin-only" onclick="exportData()">📥 今のデータを書き出す</button>
-            <label class="btn-import-label flex-1 p-10 admin-only">
-                📤 過去のデータを復元
-                <input type="file" accept=".json" class="hidden" onchange="importData(event)">
-            </label>
-        </div>
-    `;
-    teamPage.appendChild(backupDiv);
-}
-
-function exportData() {
-    const data = {
-        players: JSON.stringify(players), games: JSON.stringify(games),
-        team_name: document.getElementById('team-name-input').value,
-        manager_name: document.getElementById('manager-name-input').value,
-        captain_name: document.getElementById('captain-name-input').value
-    };
-    const blob = new Blob([JSON.stringify(data)], {type: "application/json"});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `baseball_backup_${new Date().toISOString().slice(0,10)}.json`;
-    a.click(); URL.revokeObjectURL(url);
-}
-
-function importData(event) {
-    if (!checkAdmin()) { event.target.value = ''; return; }
-    const file = event.target.files[0];
-    if (!file) return;
-    if(!confirm("現在のチームデータがすべて上書きされます。復元を実行してもよろしいですか？")) {
-        event.target.value = ''; return;
-    }
-    const reader = new FileReader();
-    reader.onload = async function(e) {
-        try {
-            const data = JSON.parse(e.target.result);
-            if (data.players) players = JSON.parse(data.players);
-            if (data.games) games = JSON.parse(data.games);
-            const newTeamName = data.team_name || document.getElementById('team-name-input').value;
-            const newManagerName = data.manager_name || document.getElementById('manager-name-input').value;
-            const newCaptainName = data.captain_name || document.getElementById('captain-name-input').value;
-
-            if (currentTeamId) {
-                await db.collection("teams").doc(currentTeamId).update({
-                    players: players, games: games, team_name: newTeamName,
-                    manager_name: newManagerName, captain_name: newCaptainName
-                });
-            }
-            alert('クラウドへのデータの復元が完了しました！');
-            selectTeam(currentTeamId, newTeamName);
-        } catch (error) { alert('ファイルの読み込みに失敗しました。'); console.error(error); }
-    };
-    reader.readAsText(file);
 }
 
 function showHelpModal(pageId) {
