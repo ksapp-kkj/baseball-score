@@ -1099,6 +1099,7 @@ function showPitcherModal(gameId) {
     document.getElementById('modal-title').innerText = `投手成績 (vs ${currentGameForScore.opponent})`;
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
+            ${getScoreBannerHtml()}
             <p class="help-text mb-10">登板した投手の成績を入力してください。</p>
             <div id="pitcher-wrapper"></div>
             <button class="btn-small-action btn-small-green mt-10 admin-only" onclick="addPitcherRow()">＋ 投手を登録</button>
@@ -1112,12 +1113,47 @@ function showPitcherModal(gameId) {
 function renderPitcherRows() {
     const wrapper = document.getElementById('pitcher-wrapper');
     wrapper.innerHTML = "";
+    
+    // 🌟 閲覧権限の確認
+    const isAdmin = currentTeamAdmins.includes(currentUser.uid);
+
     tempPitchers.forEach((item, index) => {
         const row = document.createElement('div');
-        row.className = "pitcher-row";
+        row.className = "pitcher-row mb-10";
+        
+        // 🌟 アウト数から「◯回 ◯/3」を自動計算する
+        let currentTotalOuts = (parseInt(item.innings) || 0) * 3 + (parseInt(item.outs) || 0);
+        let innDisp = Math.floor(currentTotalOuts / 3);
+        let outDisp = currentTotalOuts % 3;
+        let displayOuts = `${innDisp}回 ${outDisp}/3`;
+        if(currentTotalOuts === 0) displayOuts = "0/3";
+        
+        // カウンターUIの生成関数
+        const createCounter = (label, key, valText, isWide = false) => {
+            const wideClass = isWide ? "pitcher-val-wide" : "";
+            if (!isAdmin) {
+                return `
+                <div class="pitcher-stat-item">
+                    <span class="pitcher-stat-label">${label}</span>
+                    <span class="score-value ${wideClass}">${valText}</span>
+                </div>`;
+            }
+            return `
+            <div class="pitcher-stat-item">
+                <span class="pitcher-stat-label">${label}</span>
+                <div class="score-counter">
+                    <span class="score-value ${wideClass}">${valText}</span>
+                    <div class="spinner-btns">
+                        <button class="btn-spinner" onclick="adjustPitcherStat(${index}, '${key}', 1)">▲</button>
+                        <button class="btn-spinner" onclick="adjustPitcherStat(${index}, '${key}', -1)">▼</button>
+                    </div>
+                </div>
+            </div>`;
+        };
+
         row.innerHTML = `
             <div class="flex-gap-8 mb-8">
-                <select class="flex-select" onchange="updatePitcher(${index}, 'playerId', this.value)">
+                <select class="flex-select w-100" onchange="updatePitcher(${index}, 'playerId', this.value)" ${isAdmin ? "" : "disabled"}>
                     <option value="">-- 投手を選択 --</option>
                     ${players.map(p => {
                         const isSelected = tempPitchers.some((t, i) => i !== index && String(t.playerId) === String(p.id));
@@ -1126,24 +1162,40 @@ function renderPitcherRows() {
                         return `<option value="${p.id}" ${String(p.id) === String(item.playerId) ? 'selected' : ''}>[${p.number === "無" ? "無" : '#' + p.number}] ${p.name}${pStatus}</option>`;
                     }).join('')}
                 </select>
-                <button class="btn-remove-row admin-only" onclick="removePitcherRow(${index})">✖</button>
+                ${isAdmin ? `<button class="btn-remove-row admin-only" onclick="removePitcherRow(${index})">✖</button>` : ""}
             </div>
-            <div class="pitcher-grid">
-                <div><label>投球回</label><input type="number" min="0" value="${item.innings}" oninput="updatePitcher(${index}, 'innings', this.value)"></div>
-                <div><label>アウト</label>
-                    <select onchange="updatePitcher(${index}, 'outs', this.value)">
-                        <option value="0" ${item.outs == 0 ? 'selected':''}>0/3</option>
-                        <option value="1" ${item.outs == 1 ? 'selected':''}>1/3</option>
-                        <option value="2" ${item.outs == 2 ? 'selected':''}>2/3</option>
-                    </select>
-                </div>
-                <div><label>自責点</label><input type="number" min="0" value="${item.er}" oninput="updatePitcher(${index}, 'er', this.value)"></div>
-                <div><label>奪三振</label><input type="number" min="0" value="${item.so}" oninput="updatePitcher(${index}, 'so', this.value)"></div>
-                <div><label>四死球</label><input type="number" min="0" value="${item.bb}" oninput="updatePitcher(${index}, 'bb', this.value)"></div>
+            <div class="pitcher-grid-counter">
+                ${createCounter("投球回(ｱｳﾄ)", "outs", displayOuts, true)}
+                ${createCounter("自責点", "er", item.er || "0")}
+                ${createCounter("奪三振", "so", item.so || "0")}
+                ${createCounter("四死球", "bb", item.bb || "0")}
             </div>
         `;
         wrapper.appendChild(row);
     });
+}
+
+// 🌟 新規追加：＋/－ボタンで投手成績を増減させる関数
+function adjustPitcherStat(index, key, delta) {
+    if (!checkAdmin()) return;
+    
+    // 投球回（アウト）の場合は、自動で「イニング」と「アウト」に振り分ける
+    if (key === 'outs') {
+        let currentTotalOuts = (parseInt(tempPitchers[index].innings) || 0) * 3 + (parseInt(tempPitchers[index].outs) || 0);
+        currentTotalOuts += delta;
+        if (currentTotalOuts < 0) currentTotalOuts = 0;
+        
+        tempPitchers[index].innings = Math.floor(currentTotalOuts / 3).toString();
+        tempPitchers[index].outs = (currentTotalOuts % 3).toString();
+    } 
+    // それ以外の項目（自責点・奪三振など）
+    else {
+        let currentVal = parseInt(tempPitchers[index][key]) || 0;
+        currentVal += delta;
+        if (currentVal < 0) currentVal = 0;
+        tempPitchers[index][key] = currentVal.toString();
+    }
+    renderPitcherRows();
 }
 
 function updatePitcher(index, key, value) { tempPitchers[index][key] = value; if (key === 'playerId') renderPitcherRows(); }
@@ -1155,6 +1207,36 @@ function savePitchers() {
     currentGameForScore.pitchers = filtered;
     saveAndRefreshGames();
     closeModal();
+}
+
+// 🌟 修正：先攻が左側、後攻が右側になるように連動させたバナー生成関数
+function getScoreBannerHtml() {
+    const g = currentGameForScore;
+    if (!g) return '';
+    if (!g.innings) g.innings = Array(9).fill().map(() => ({ us: "", them: "" }));
+    
+    let totalUs = g.innings.reduce((sum, inn) => sum + (parseInt(inn.us) || 0), 0);
+    let totalThem = g.innings.reduce((sum, inn) => sum + (parseInt(inn.them) || 0), 0);
+    
+    // 🌟 先攻・後攻の判定
+    const isUsBattingFirst = g.side === "先攻";
+
+    // 🌟 先攻を必ず左側、後攻を必ず右側に配置する
+    const leftName = isUsBattingFirst ? "自チーム(先攻)" : "相手(先攻)";
+    const rightName = isUsBattingFirst ? "相手(後攻)" : "自チーム(後攻)";
+    const leftScore = isUsBattingFirst ? totalUs : totalThem;
+    const rightScore = isUsBattingFirst ? totalThem : totalUs;
+    
+    return `
+        <div class="current-score-banner">
+            <div class="current-score-text">
+                ${leftName} <span class="score-highlight">${leftScore} - ${rightScore}</span> ${rightName}
+            </div>
+            <button class="btn-jump-score" onclick="showScoreInputModal(${g.id})">
+                ⚾️ スコアボードを開いて点を入れる
+            </button>
+        </div>
+    `;
 }
 
 function showAtBatMatrixModal(gameId) {
@@ -1192,6 +1274,7 @@ function renderAtBatMatrix() {
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
             <p class="modal-vs-title">vs ${g.opponent}</p>
+            ${getScoreBannerHtml()}
             <p class="help-text mb-10">入力したい打席の枠をタップしてください。</p>
             <div class="score-table-container">
                 <table class="score-table atbat-table">
@@ -1227,6 +1310,7 @@ function openAtBatInput(lineIdx, atBatIdx) {
     document.getElementById('modal-title').innerText = `第${atBatIdx+1}打席: ${pName}`;
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
+            ${getScoreBannerHtml()}
             <label>結果:</label>
             <select id="ab-result" class="large-select">
                 ${resultOptions.map(opt => `<option value="${opt}" ${currentRes.result === opt ? 'selected' : ''}>${opt === '' ? '-- 選択してください --' : opt}</option>`).join('')}
@@ -1244,13 +1328,50 @@ function openAtBatInput(lineIdx, atBatIdx) {
                 </div>
             </div>
             <div class="modal-btns mt-20">
-                <button class="btn-save-blue btn-save bg-blue" onclick="saveAndNextAtBat(${lineIdx}, ${atBatIdx})">決定して次の打者へ ➡</button>
+                <div class="atbat-nav-btns">
+                    <button class="btn-save-blue btn-save bg-blue" onclick="saveAndPrevAtBat(${lineIdx}, ${atBatIdx})">⬅ 前の打者</button>
+                    <button class="btn-save-blue btn-save bg-blue" onclick="saveAndNextAtBat(${lineIdx}, ${atBatIdx})">次の打者 ➡</button>
+                </div>
                 <button class="btn-save-green btn-save bg-green" onclick="saveAtBatInput(${lineIdx}, ${atBatIdx})">決定して表に戻る</button>
                 <button class="btn-delete bg-danger" onclick="clearAtBatInput(${lineIdx}, ${atBatIdx})">この打席を空欄にする</button>
                 <button class="btn-edit-mode bg-gray" onclick="renderAtBatMatrix()">キャンセル</button>
             </div>
         </div>
     `;
+}
+
+// 🌟 新規追加：保存して「前の打者」の画面に移動する関数
+function saveAndPrevAtBat(lineIdx, atBatIdx) {
+    if (!checkAdmin()) return;
+    
+    // 1. まず現在の打席の内容を保存する
+    currentGameForScore.lineup[lineIdx].results[atBatIdx] = { 
+        result: document.getElementById('ab-result').value, 
+        rbi: Number(document.getElementById('ab-rbi').value), 
+        steal: Number(document.getElementById('ab-steal').value) 
+    };
+    saveAndRefreshGames();
+    
+    // 2. 前の打者のインデックスを計算する
+    let prevLine = lineIdx - 1;
+    let prevAtBat = atBatIdx;
+    
+    // もし1番上のバッターより上に行こうとしたら、1つ前の打席の1番下のバッターに移動
+    if (prevLine < 0) { 
+        prevLine = currentGameForScore.lineup.length - 1; 
+        prevAtBat--; 
+    }
+    
+    // 3番バッターの第1打席などからさらに前へ戻ろうとした場合のブロック
+    if (prevAtBat < 0) {
+        alert("これより前の打席はありません。");
+        renderAtBatMatrix(); 
+        return;
+    }
+    
+    // 3. 表を再描画して、前の打者の入力モーダルを開く
+    renderAtBatMatrix(); 
+    openAtBatInput(prevLine, prevAtBat);
 }
 
 function saveAndNextAtBat(lineIdx, atBatIdx) {
