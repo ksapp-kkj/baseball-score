@@ -993,9 +993,9 @@ function renderGameList() {
                 </div>
                 
                 <div class="game-accordion-body">
-                    <div class="game-detail-text">☁️ 天気: ${g.weather}</div>
-                    <div class="game-detail-text">📍 場所: ${g.location}</div>
-                    <div class="game-detail-text">👥 参加: ${pCount}名</div>
+                    <div class="game-detail-text">天気: ${g.weather}</div>
+                    <div class="game-detail-text">場所: ${g.location}</div>
+                    <div class="game-detail-text">参加: ${pCount}名</div>
                     <div class="game-detail-text score-text mt-10">スコア: ${g.score.us} - ${g.score.them}${resultText}</div>
                     
                     <div class="flex-gap-8 mt-15">
@@ -1233,7 +1233,7 @@ function getScoreBannerHtml() {
                 ${leftName} <span class="score-highlight">${leftScore} - ${rightScore}</span> ${rightName}
             </div>
             <button class="btn-jump-score" onclick="showScoreInputModal(${g.id})">
-                ⚾️ スコアボードを開いて点を入れる
+                スコアボードを開く
             </button>
         </div>
     `;
@@ -1418,21 +1418,52 @@ function showScoreInputModal(gameId) {
     document.getElementById('modal-title').innerText = "イニングスコア入力";
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
-            <p class="modal-vs-title-lg">vs ${currentGameForScore.opponent}</p>
+            <p class="modal-vs-title-lg mb-10">vs ${currentGameForScore.opponent}</p>
+            
+            <div class="score-nav-btns">
+                <button class="btn-jump-stats" onclick="jumpFromScoreTo('atbat', ${gameId})">打席成績へ</button>
+                <button class="btn-jump-stats pitcher" onclick="jumpFromScoreTo('pitcher', ${gameId})">投手成績へ</button>
+            </div>
+
             <div id="score-board-wrapper"></div>
+            
             <div class="flex-gap-8 mt-10 admin-only">
                 <button class="btn-small-action btn-small-gray flex-1" onclick="addInning()">＋ イニング追加</button>
                 <button class="btn-small-action bg-danger flex-1" onclick="removeInning()">ー イニング削除</button>
             </div>
-            <label class="checkbox-label-row ${labelClass}">
+            <label class="checkbox-label-row ${labelClass} mt-10">
                 <input type="checkbox" id="s-finished" class="chk-finished" ${currentGameForScore.isFinished ? 'checked' : ''} ${disabledAttr}>
                 この試合を終了とする（集計に反映）
             </label>
-            <div class="modal-btns mt-20"><button class="btn-save admin-only" onclick="saveScoreBoard()">スコアを保存する</button></div>
+            <div class="modal-btns mt-20">
+                <button class="btn-save admin-only" onclick="saveScoreBoard()">スコアを保存して閉じる</button>
+            </div>
         </div>
     `;
     renderScoreBoardTable();
     document.getElementById('modal-overlay').style.display = 'flex';
+}
+
+// 🌟 新規追加：スコアを保存してから他の成績画面へワープする関数
+function jumpFromScoreTo(destination, gameId) {
+    // 管理者の場合のみ、移動前に現在のスコア（合計点・試合終了チェック）を確実に保存する
+    if (currentTeamAdmins.includes(currentUser.uid)) {
+        const g = currentGameForScore;
+        g.score.us = g.innings.reduce((sum, inn) => sum + (parseInt(inn.us) || 0), 0);
+        g.score.them = g.innings.reduce((sum, inn) => sum + (parseInt(inn.them) || 0), 0);
+        const finishCheckbox = document.getElementById('s-finished');
+        if (finishCheckbox) g.isFinished = finishCheckbox.checked;
+        
+        saveAndRefreshGames(); // Firebaseに状態を保存
+        updateTeamRecord();
+    }
+    
+    // 指定された画面へ切り替える
+    if (destination === 'atbat') {
+        showAtBatMatrixModal(gameId);
+    } else if (destination === 'pitcher') {
+        showPitcherModal(gameId);
+    }
 }
 
 function removeInning() {
@@ -1550,11 +1581,11 @@ function showHelpModal(pageId) {
             title: "ログイン・新規登録の使い方",
             content: `
                 <div class="help-content-modal">
-                    <p><strong>【はじめての方（新規登録）】</strong></p>
-                    <p>1. お使いの「メールアドレス」と「パスワード」を入力します。</p>
+                    <p class="help-section-title">【はじめての方（新規登録）】</p>
+                    <p>1. お使いの「メールアドレス」と「パスワード(6文字以上)」を入力します。</p>
                     <p>2. 「登録して始める」ボタンを押します。</p>
                     <hr class="modal-hr">
-                    <p><strong>【すでに登録済みの方（ログイン）】</strong></p>
+                    <p class="help-section-title">【すでに登録済みの方（ログイン）】</p>
                     <p>登録した「メールアドレス」と「パスワード」を入力し、ログインしてください。</p>
                 </div>`
         },
@@ -1564,23 +1595,28 @@ function showHelpModal(pageId) {
                 <div class="help-content-modal">
                     <p>・チームの基本情報と、所属する<strong>選手の名簿</strong>を管理します。</p>
                     <p>・「選手登録」からメンバーを追加してください（現役選手の背番号重複はできません）。</p>
-                    <p>・選手ごとのステータス（現役・活動休止中・OB/OG）も設定可能です。</p>
+                    <p>・<strong>チーム招待ID</strong>は画面の一番下にあります。新メンバーを招待する際にご活用ください。</p>
+                    <p>・データはクラウドへ保存されるため、手動でのバックアップは不要です。</p>
                 </div>`
         },
         game: {
             title: "試合管理・スコア入力の使い方",
             content: `
                 <div class="help-content-modal">
-                    <p>試合の予定作成から、<strong>当日のスタメン登録、スコア入力まで</strong>をすべてこの画面で行います。</p>
+                    <p>試合の予定作成からスコア入力までを行います。</p>
                     
-                    <p style="color: var(--grass-green); font-weight: bold; margin-top: 15px;">【1. 試合の準備】</p>
+                    <p class="help-section-title text-grass">【1. 試合の準備】</p>
                     <p>・「新規試合登録」から対戦相手や参加者を登録します。</p>
-                    <p>・試合のカードをタップして開き、「スタメン・打順」ボタンからオーダーを組みます。</p>
+                    <p>・試合カードを開き、「スタメン・打順」からオーダーを組みます。</p>
                     
-                    <p style="color: var(--score-blue); font-weight: bold; margin-top: 15px;">【2. スコアの入力】</p>
-                    <p>・<strong>打席成績：</strong>表のマス目をタップして結果を入力します。</p>
-                    <p>・<strong>投手成績：</strong>登板した投手の投球回や自責点を入力します。</p>
-                    <p>・試合が終わったら「イニングスコアボード」を開き、<strong>『この試合を終了とする』にチェックを入れて保存</strong>してください。これで通算成績にデータが反映されます。</p>
+                    <p class="help-section-title text-blue">【2. スコア入力】</p>
+                    <p>・<strong>画面遷移：</strong> 成績入力画面の上部に現在のスコアが常時表示され、ボタン一つで「スコアボード」と「成績入力画面」を行き来できます。</p>
+                    <p>・<strong>打席成績：</strong> 「前の打者」「次の打者」ボタンを使えば、画面を閉じずにサクサク入力できます（盗塁の記録に便利です）。</p>
+                    <p>・<strong>投手成績：</strong> 投球回は「▲▼」ボタンでアウトを記録すると、自動でイニングが繰り上がります。</p>
+                    <p>・<strong>スコアボード：</strong> 先攻・後攻が自動連動し、「▲▼」ボタンで直感的に得点を入力できます。</p>
+                    
+                    <p class="help-section-title text-orange">【3. 試合の終了】</p>
+                    <p>・試合が終わったら「イニングスコアボード」を開き、<strong>『この試合を終了とする』にチェックを入れて保存</strong>してください。これで成績に反映されます。</p>
                 </div>`
         },
         stats: {
@@ -1589,6 +1625,7 @@ function showHelpModal(pageId) {
                 <div class="help-content-modal">
                     <p>・「終了済」になった試合のデータから、<strong>個人の打撃成績と投手成績を自動で計算</strong>して表示します。</p>
                     <p>・「表示年」のプルダウンで年ごとの成績に絞り込めます。</p>
+                    <p>・投手の「防御率」は、試合全体の失点ではなく、投手成績で入力した<strong>「自責点」</strong>をもとに計算されます。</p>
                 </div>`
         }
     };
