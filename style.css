@@ -1057,6 +1057,7 @@ input[list]::-webkit-calendar-picker-indicator {
     font-size: 1.1rem;
     font-weight: bold;
     color: var(--text-main);
+    white-space: nowrap; /* 🌟 追加：文字が長くても絶対に改行させない */
 }
 .score-highlight {
     font-size: 1.6rem;
@@ -1082,4 +1083,84 @@ input[list]::-webkit-calendar-picker-indicator {
 .btn-jump-score:active {
     background: var(--grass-green);
     color: #ffffff;
+}
+
+/* 🌟 スコアボードから成績画面へのワープボタン用スタイル */
+.score-nav-btns {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 15px;
+    width: 100%;
+}
+.btn-jump-stats {
+    flex: 1;
+    background: #ffffff;
+    border: 2px solid var(--score-blue);
+    color: var(--score-blue);
+    border-radius: 6px;
+    padding: 10px 5px;
+    font-size: 0.95rem;
+    font-weight: bold;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.2s, color 0.2s;
+}
+.btn-jump-stats:active {
+    background: var(--score-blue);
+    color: #ffffff;
+}
+/* 投手用のボタンは紫色にする */
+.btn-jump-stats.pitcher {
+    border-color: #8e24aa; 
+    color: #8e24aa;
+}
+.btn-jump-stats.pitcher:active {
+    background: #8e24aa;
+    color: #ffffff;
+}
+
+/* 🌟 スマホ向けのレスポンシブ対応（画面幅に合わせて文字を縮小） */
+
+/* 画面幅が 430px 以下（一般的なスマホサイズ）の場合 */
+@media screen and (max-width: 430px) {
+    .current-score-banner {
+        padding: 10px 5px; /* バナーの左右の余白を減らして横幅を確保 */
+    }
+    .current-score-text {
+        font-size: 0.9rem; /* チーム名と(先攻)の文字を小さく */
+    }
+    .score-highlight {
+        font-size: 1.3rem; /* 得点の数字を小さく */
+        margin: 0 4px; /* 得点の左右の隙間を狭くする */
+    }
+    .btn-jump-score {
+        font-size: 0.85rem; /* ボタンの文字も少し小さく */
+        padding: 6px 12px;
+    }
+}
+
+/* 画面幅が 375px 以下（iPhone SEなどの特に小さいスマホ）の場合 */
+@media screen and (max-width: 375px) {
+    .current-score-text {
+        font-size: 0.75rem; /* さらに文字を小さくして1行に収める */
+    }
+    .score-highlight {
+        font-size: 1.1rem;
+    }
+}
+
+/* 🌟 ヘルプモーダル用のテキストスタイル */
+.help-section-title {
+    font-weight: bold;
+    margin-top: 15px;
+    margin-bottom: 5px;
+}
+.text-grass {
+    color: var(--grass-green);
+}
+.text-blue {
+    color: var(--score-blue);
+}
+.text-orange {
+    color: var(--edit-color);
 }
