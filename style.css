@@ -507,6 +507,14 @@ th {
     margin-top: 2px;
 }
 
+.runs-text {
+    color: #e65100;
+    font-size: 0.75rem;
+    display: block;
+    margin-top: 2px;
+    font-weight: normal;
+}
+
 .steal-text {
     color: #1976d2;
     font-size: 0.75rem;
@@ -999,7 +1007,7 @@ input[list]::-webkit-calendar-picker-indicator {
 /* 🌟 投手記録のカウンター用スタイル */
 .pitcher-grid-counter {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr); /* 2から3に変更 */
     gap: 10px;
     margin-top: 10px;
     background: #ffffff;
@@ -1007,6 +1015,7 @@ input[list]::-webkit-calendar-picker-indicator {
     border-radius: 8px;
     border: 1px solid #ddd;
 }
+
 .pitcher-stat-item {
     display: flex;
     flex-direction: column;
@@ -1137,6 +1146,9 @@ input[list]::-webkit-calendar-picker-indicator {
         font-size: 0.85rem; /* ボタンの文字も少し小さく */
         padding: 6px 12px;
     }
+    .pitcher-grid-counter {
+        grid-template-columns: repeat(2, 1fr); /* スマホ画面の時は2列に折り返す */
+    }
 }
 
 /* 画面幅が 375px 以下（iPhone SEなどの特に小さいスマホ）の場合 */
@@ -1163,4 +1175,38 @@ input[list]::-webkit-calendar-picker-indicator {
 }
 .text-orange {
     color: var(--edit-color);
+}
+
+/* 🌟 打席成績の表示切り替えスイッチ用 */
+.view-toggle-container {
+    display: flex;
+    margin-bottom: 15px;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--grass-green);
+}
+.btn-toggle {
+    flex: 1;
+    background: #ffffff;
+    color: var(--grass-green);
+    border: none;
+    padding: 10px;
+    font-size: 0.95rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+.btn-toggle.active {
+    background: var(--grass-green);
+    color: #ffffff;
+}
+/* 打席順表示の時の「◯回」バッジ */
+.inning-badge {
+    font-size: 0.7rem;
+    color: #666;
+    background: #eee;
+    padding: 2px 5px;
+    border-radius: 4px;
+    display: inline-block;
+    margin-bottom: 4px;
 }
