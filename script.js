@@ -1095,7 +1095,7 @@ function showPitcherModal(gameId) {
     currentGameForScore = games.find(g => g.id === gameId);
     if (!currentGameForScore.pitchers) currentGameForScore.pitchers = [];
     tempPitchers = JSON.parse(JSON.stringify(currentGameForScore.pitchers));
-    if (tempPitchers.length === 0) tempPitchers.push({ playerId: "", innings: "", outs: "0", er: "", so: "", bb: "" });
+    if (tempPitchers.length === 0) tempPitchers.push({ playerId: "", innings: "", outs: "0", hits: "0", er: "0", so: "0", bb: "0" }); // 🌟 hits を追加
     document.getElementById('modal-title').innerText = `投手成績 (vs ${currentGameForScore.opponent})`;
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
@@ -1166,6 +1166,7 @@ function renderPitcherRows() {
             </div>
             <div class="pitcher-grid-counter">
                 ${createCounter("投球回(ｱｳﾄ)", "outs", displayOuts, true)}
+                ${createCounter("被安打", "hits", item.hits || "0")}
                 ${createCounter("自責点", "er", item.er || "0")}
                 ${createCounter("奪三振", "so", item.so || "0")}
                 ${createCounter("四死球", "bb", item.bb || "0")}
@@ -1199,7 +1200,10 @@ function adjustPitcherStat(index, key, delta) {
 }
 
 function updatePitcher(index, key, value) { tempPitchers[index][key] = value; if (key === 'playerId') renderPitcherRows(); }
-function addPitcherRow() { tempPitchers.push({ playerId: "", innings: "", outs: "0", er: "", so: "", bb: "" }); renderPitcherRows(); }
+function addPitcherRow() { 
+    tempPitchers.push({ playerId: "", innings: "", outs: "0", hits: "0", er: "0", so: "0", bb: "0" }); // 🌟 hits を追加
+    renderPitcherRows(); 
+}
 function removePitcherRow(index) { tempPitchers.splice(index, 1); renderPitcherRows(); }
 function savePitchers() {
     if (!checkAdmin()) return;
@@ -1250,31 +1254,123 @@ function showAtBatMatrixModal(gameId) {
     renderAtBatMatrix();
 }
 
+// 🌟 新規追加：表示モードの切り替えを保存する関数
+function setAtBatView(mode) {
+    currentGameForScore.atBatViewMode = mode;
+    renderAtBatMatrix();
+}
+
+// 🌟 修正：打者一巡時にイニングのヘッダーセルを結合（colspan）する描画関数
 function renderAtBatMatrix() {
     const g = currentGameForScore;
-    let headerHtml = `<th>順</th><th class="th-left">選手</th>`;
-    for(let i=0; i<currentAtBatColumns; i++) headerHtml += `<th>第${i+1}打席</th>`;
+    const viewMode = g.atBatViewMode || 'paper'; // デフォルトは紙方式（paper）
 
-    let rowsHtml = g.lineup.map((item, lineIdx) => {
-        const player = players.find(p => String(p.id) === String(item.playerId));
-        const pName = player ? player.name : "不明";
-        let colsHtml = "";
-        for(let atBatIdx=0; atBatIdx<currentAtBatColumns; atBatIdx++) {
-            const resData = item.results[atBatIdx];
-            const text = resData && resData.result ? resData.result : "";
-            const rbiText = resData && resData.rbi > 0 ? `<span class="rbi-text">${resData.rbi}打点</span>` : "";
-            const stealText = resData && resData.steal > 0 ? `<span class="steal-text">${resData.steal}盗</span>` : "";
-            const isFilled = text !== "" ? "filled" : "";
-            colsHtml += `<td class="atbat-cell ${isFilled}" onclick="openAtBatInput(${lineIdx}, ${atBatIdx})">${text}${rbiText}${stealText}</td>`;
+    // 切り替えスイッチのHTML
+    let toggleHtml = `
+        <div class="view-toggle-container">
+            <button class="btn-toggle ${viewMode === 'paper' ? 'active' : ''}" onclick="setAtBatView('paper')">📄 スコアブック方式 (回ごと)</button>
+            <button class="btn-toggle ${viewMode === 'list' ? 'active' : ''}" onclick="setAtBatView('list')">📝 従来方式 (打席順)</button>
+        </div>
+    `;
+
+    let headerHtml = `<th>順</th><th class="th-left">選手</th>`;
+    let rowsHtml = '';
+    let listModeBtnsHtml = '';
+
+    if (viewMode === 'paper') {
+        // =============== 📄 紙のスコアブック方式 ===============
+        // ① スコアボードの回数と、データ上の最大イニングを比較して列のベースを作る
+        let maxInning = Math.max(9, g.innings ? g.innings.length : 9);
+        let cycleMap = {}; // 打者一巡した回数を記録
+        
+        g.lineup.forEach(item => {
+            let playerCycles = {};
+            (item.results || []).forEach(res => {
+                let inn = Number(res.inning) || 1;
+                maxInning = Math.max(maxInning, inn);
+                playerCycles[inn] = (playerCycles[inn] || 0) + 1;
+            });
+            for (let inn in playerCycles) {
+                cycleMap[inn] = Math.max(cycleMap[inn] || 1, playerCycles[inn]);
+            }
+        });
+
+        // ② 列の構成を作成
+        let columns = [];
+        let headerColumns = []; // 🌟 ヘッダー結合用にイニングごとの列数を記録する配列
+        for (let i = 1; i <= maxInning; i++) {
+            let cycles = cycleMap[i] || 1;
+            headerColumns.push({ inning: i, count: cycles }); // 🌟 結合数（何列分か）を保存
+            for (let c = 0; c < cycles; c++) { columns.push({ inning: i, cycle: c }); }
         }
-        return `<tr><td class="td-center-bold">${lineIdx+1}</td><td class="team-name">${pName}<br><span class="player-pos-sub">${item.position}</span></td>${colsHtml}</tr>`;
-    }).join('');
+
+        // 🌟 修正：同じイニングの列は colspan を使ってセルを結合する
+        headerColumns.forEach(col => {
+            if (col.count > 1) {
+                headerHtml += `<th colspan="${col.count}">${col.inning}回</th>`;
+            } else {
+                headerHtml += `<th>${col.inning}回</th>`;
+            }
+        });
+
+        // ③ マス目にデータを当てはめる
+        rowsHtml = g.lineup.map((item, lineIdx) => {
+            const pName = players.find(p => String(p.id) === String(item.playerId))?.name || "不明";
+            let colsHtml = columns.map(col => {
+                let playerAtBatsInInning = (item.results || []).filter(r => (r.inning || 1) == col.inning);
+                let resData = playerAtBatsInInning[col.cycle]; // その回のN回目の打席を取得
+
+                if (resData) {
+                    let originalIndex = item.results.indexOf(resData); // 保存用に元のインデックスを特定
+                    const text = resData.result || "";
+                    const rbiText = resData.rbi > 0 ? `<span class="rbi-text">${resData.rbi}打点</span>` : "";
+                    const runText = resData.runs > 0 ? `<span class="runs-text">生還</span>` : "";
+                    const stealText = resData.steal > 0 ? `<span class="steal-text">${resData.steal}盗</span>` : "";
+                    return `<td class="atbat-cell filled" onclick="openAtBatInput(${lineIdx}, ${originalIndex}, ${col.inning})">${text}${rbiText}${runText}${stealText}</td>`;
+                } else {
+                    return `<td class="atbat-cell" onclick="openAtBatInput(${lineIdx}, null, ${col.inning})"></td>`;
+                }
+            }).join('');
+            return `<tr><td class="td-center-bold">${lineIdx+1}</td><td class="team-name">${pName}<br><span class="player-pos-sub">${item.position}</span></td>${colsHtml}</tr>`;
+        }).join('');
+
+    } else {
+        // =============== 📝 従来方式 (打席順) ===============
+        let maxCols = 5;
+        g.lineup.forEach(item => { if (item.results.length >= maxCols) maxCols = item.results.length + 1; });
+        currentAtBatColumns = maxCols;
+
+        for(let i=0; i<currentAtBatColumns; i++) headerHtml += `<th>第${i+1}打席</th>`;
+
+        rowsHtml = g.lineup.map((item, lineIdx) => {
+            const pName = players.find(p => String(p.id) === String(item.playerId))?.name || "不明";
+            let colsHtml = "";
+            for(let atBatIdx=0; atBatIdx<currentAtBatColumns; atBatIdx++) {
+                const resData = item.results[atBatIdx];
+                const innBadge = resData && resData.inning ? `<span class="inning-badge">[${resData.inning}回]</span><br>` : "";
+                const text = resData && resData.result ? resData.result : "";
+                const rbiText = resData && resData.rbi > 0 ? `<span class="rbi-text">${resData.rbi}打点</span>` : "";
+                const runText = resData && resData.runs > 0 ? `<span class="runs-text">生還</span>` : "";
+                const stealText = resData && resData.steal > 0 ? `<span class="steal-text">${resData.steal}盗</span>` : "";
+                const isFilled = text !== "" ? "filled" : "";
+                colsHtml += `<td class="atbat-cell ${isFilled}" onclick="openAtBatInput(${lineIdx}, ${atBatIdx}, null)">${innBadge}${text}${rbiText}${runText}${stealText}</td>`;
+            }
+            return `<tr><td class="td-center-bold">${lineIdx+1}</td><td class="team-name">${pName}<br><span class="player-pos-sub">${item.position}</span></td>${colsHtml}</tr>`;
+        }).join('');
+
+        listModeBtnsHtml = `
+            <div class="flex-gap-8 mt-10 admin-only">
+                <button class="btn-small-action btn-small-gray flex-1" onclick="addAtBatColumn()">＋ 列を追加</button>
+                <button class="btn-small-action bg-danger flex-1" onclick="removeAtBatColumn()">ー 列を削除</button>
+            </div>`;
+    }
 
     document.getElementById('modal-title').innerText = "打席成績の入力";
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
             <p class="modal-vs-title">vs ${g.opponent}</p>
             ${getScoreBannerHtml()}
+            ${toggleHtml}
             <p class="help-text mb-10">入力したい打席の枠をタップしてください。</p>
             <div class="score-table-container">
                 <table class="score-table atbat-table">
@@ -1282,10 +1378,7 @@ function renderAtBatMatrix() {
                     <tbody>${rowsHtml}</tbody>
                 </table>
             </div>
-            <div class="flex-gap-8 mt-10 admin-only">
-                <button class="btn-small-action btn-small-gray flex-1" onclick="addAtBatColumn()">＋ 列を追加</button>
-                <button class="btn-small-action bg-danger flex-1" onclick="removeAtBatColumn()">ー 列を削除</button>
-            </div>
+            ${listModeBtnsHtml}
             <div class="modal-btns mt-15"><button class="btn-save bg-gray" onclick="closeModal();">閉じる</button></div>
         </div>
     `;
@@ -1298,112 +1391,134 @@ function removeAtBatColumn() {
 }
 function addAtBatColumn() { currentAtBatColumns++; renderAtBatMatrix(); }
 
-function openAtBatInput(lineIdx, atBatIdx) {
+// 🌟 修正：イニング情報を組み込んだ入力画面
+function openAtBatInput(lineIdx, atBatIdx, targetInning) {
     if (!currentTeamAdmins.includes(currentUser.uid)) return alert("【閲覧専用モード】\nこの操作は管理者のみ可能です。");
     const g = currentGameForScore;
     const item = g.lineup[lineIdx];
     const player = players.find(p => String(p.id) === String(item.playerId));
     const pName = player ? player.name : "不明";
-    const currentRes = item.results[atBatIdx] || { result: "", rbi: 0, steal: 0 };
+    
+    const isNewInPaper = (atBatIdx === null); // 紙方式の空セルをクリックしたか判定
+    
+    // 直前の打者のイニングを推測してアシストする関数
+    const guessInning = () => {
+        if (item.results.length > 0) return item.results[item.results.length - 1].inning || 1;
+        if (lineIdx > 0 && g.lineup[lineIdx - 1].results.length > 0) return g.lineup[lineIdx - 1].results[g.lineup[lineIdx - 1].results.length - 1].inning || 1;
+        return 1;
+    };
+
+    let defaultInning = targetInning || guessInning();
+    const currentRes = isNewInPaper ? { result: "", rbi: 0, runs: 0, steal: 0, inning: defaultInning } : (item.results[atBatIdx] || { result: "", rbi: 0, runs: 0, steal: 0, inning: defaultInning }); 
+
     const resultOptions = ['', '単打', '二塁打', '三塁打', '本塁打', '四死球', '三振', '内野ゴロ', '内野フライ', '外野フライ', 'エラー出塁', '犠打・犠飛'];
     
-    document.getElementById('modal-title').innerText = `第${atBatIdx+1}打席: ${pName}`;
+    let titleText = g.atBatViewMode === 'paper' ? `【${currentRes.inning}回】 ${pName}` : `第${atBatIdx+1}打席: ${pName}`;
+
+    document.getElementById('modal-title').innerText = titleText;
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
             ${getScoreBannerHtml()}
-            <label>結果:</label>
-            <select id="ab-result" class="large-select">
-                ${resultOptions.map(opt => `<option value="${opt}" ${currentRes.result === opt ? 'selected' : ''}>${opt === '' ? '-- 選択してください --' : opt}</option>`).join('')}
-            </select>
+            
             <div class="flex-gap-8 mt-10">
-                <div class="flex-1"><label>打点:</label>
-                    <select id="ab-rbi" class="large-select w-100">
-                        ${[0,1,2,3,4].map(n => `<option value="${n}" ${Number(currentRes.rbi) === n ? 'selected' : ''}>${n}</option>`).join('')}
+                <div class="flex-1"><label>イニング:</label>
+                    <select id="ab-inning" class="large-select w-100">
+                        ${[1,2,3,4,5,6,7,8,9,10,11,12].map(n => `<option value="${n}" ${Number(currentRes.inning) === n ? 'selected' : ''}>${n}回</option>`).join('')}
                     </select>
                 </div>
-                <div class="flex-1"><label>盗塁:</label>
-                    <select id="ab-steal" class="large-select w-100">
-                        ${[0,1,2,3,4].map(n => `<option value="${n}" ${Number(currentRes.steal) === n ? 'selected' : ''}>${n}</option>`).join('')}
+                <div class="flex-1" style="flex: 2;"><label>結果:</label>
+                    <select id="ab-result" class="large-select w-100">
+                        ${resultOptions.map(opt => `<option value="${opt}" ${currentRes.result === opt ? 'selected' : ''}>${opt === '' ? '-- 選択 --' : opt}</option>`).join('')}
                     </select>
+                </div>
+            </div>
+
+            <div class="flex-gap-8 mt-10">
+                <div class="flex-1"><label>打点:</label>
+                    <select id="ab-rbi" class="large-select w-100">${[0,1,2,3,4].map(n => `<option value="${n}" ${Number(currentRes.rbi) === n ? 'selected' : ''}>${n}</option>`).join('')}</select>
+                </div>
+                <div class="flex-1"><label>得点(生還):</label>
+                    <select id="ab-runs" class="large-select w-100">${[0,1].map(n => `<option value="${n}" ${Number(currentRes.runs) === n ? 'selected' : ''}>${n}</option>`).join('')}</select>
+                </div>
+                <div class="flex-1"><label>盗塁:</label>
+                    <select id="ab-steal" class="large-select w-100">${[0,1,2,3,4].map(n => `<option value="${n}" ${Number(currentRes.steal) === n ? 'selected' : ''}>${n}</option>`).join('')}</select>
                 </div>
             </div>
             <div class="modal-btns mt-20">
                 <div class="atbat-nav-btns">
-                    <button class="btn-save-blue btn-save bg-blue" onclick="saveAndPrevAtBat(${lineIdx}, ${atBatIdx})">⬅ 前の打者</button>
-                    <button class="btn-save-blue btn-save bg-blue" onclick="saveAndNextAtBat(${lineIdx}, ${atBatIdx})">次の打者 ➡</button>
+                    <button class="btn-save-blue btn-save bg-blue" onclick="saveAndPrevAtBat(${lineIdx}, ${isNewInPaper ? 'null' : atBatIdx}, ${currentRes.inning})">⬅ 前の打者</button>
+                    <button class="btn-save-blue btn-save bg-blue" onclick="saveAndNextAtBat(${lineIdx}, ${isNewInPaper ? 'null' : atBatIdx}, ${currentRes.inning})">次の打者 ➡</button>
                 </div>
-                <button class="btn-save-green btn-save bg-green" onclick="saveAtBatInput(${lineIdx}, ${atBatIdx})">決定して表に戻る</button>
-                <button class="btn-delete bg-danger" onclick="clearAtBatInput(${lineIdx}, ${atBatIdx})">この打席を空欄にする</button>
+                <button class="btn-save-green btn-save bg-green" onclick="saveAtBatInput(${lineIdx}, ${isNewInPaper ? 'null' : atBatIdx})">決定して表に戻る</button>
+                <button class="btn-delete bg-danger" onclick="clearAtBatInput(${lineIdx}, ${isNewInPaper ? 'null' : atBatIdx})">この打席を空欄にする</button>
                 <button class="btn-edit-mode bg-gray" onclick="renderAtBatMatrix()">キャンセル</button>
             </div>
         </div>
     `;
 }
 
-// 🌟 新規追加：保存して「前の打者」の画面に移動する関数
-function saveAndPrevAtBat(lineIdx, atBatIdx) {
+function saveAndPrevAtBat(lineIdx, atBatIdx, targetInning) {
     if (!checkAdmin()) return;
-    
-    // 1. まず現在の打席の内容を保存する
-    currentGameForScore.lineup[lineIdx].results[atBatIdx] = { 
-        result: document.getElementById('ab-result').value, 
-        rbi: Number(document.getElementById('ab-rbi').value), 
-        steal: Number(document.getElementById('ab-steal').value) 
-    };
-    saveAndRefreshGames();
-    
-    // 2. 前の打者のインデックスを計算する
+    saveAtBatInput(lineIdx, atBatIdx); // 一度保存
     let prevLine = lineIdx - 1;
-    let prevAtBat = atBatIdx;
-    
-    // もし1番上のバッターより上に行こうとしたら、1つ前の打席の1番下のバッターに移動
-    if (prevLine < 0) { 
-        prevLine = currentGameForScore.lineup.length - 1; 
-        prevAtBat--; 
+    if (prevLine < 0) prevLine = currentGameForScore.lineup.length - 1;
+
+    if (currentGameForScore.atBatViewMode === 'paper') {
+        let existingIdx = (currentGameForScore.lineup[prevLine].results || []).findIndex(r => r.inning === targetInning);
+        openAtBatInput(prevLine, existingIdx === -1 ? null : existingIdx, targetInning);
+    } else {
+        let prevAtBat = (atBatIdx === null) ? 0 : atBatIdx;
+        if (prevLine === currentGameForScore.lineup.length - 1) prevAtBat--;
+        if (prevAtBat < 0) { alert("これより前の打席はありません。"); renderAtBatMatrix(); return; }
+        openAtBatInput(prevLine, prevAtBat, null);
     }
-    
-    // 3番バッターの第1打席などからさらに前へ戻ろうとした場合のブロック
-    if (prevAtBat < 0) {
-        alert("これより前の打席はありません。");
-        renderAtBatMatrix(); 
-        return;
-    }
-    
-    // 3. 表を再描画して、前の打者の入力モーダルを開く
-    renderAtBatMatrix(); 
-    openAtBatInput(prevLine, prevAtBat);
 }
 
-function saveAndNextAtBat(lineIdx, atBatIdx) {
+function saveAndNextAtBat(lineIdx, atBatIdx, targetInning) {
     if (!checkAdmin()) return;
-    currentGameForScore.lineup[lineIdx].results[atBatIdx] = { 
-        result: document.getElementById('ab-result').value, 
-        rbi: Number(document.getElementById('ab-rbi').value), 
-        steal: Number(document.getElementById('ab-steal').value) 
-    };
-    saveAndRefreshGames();
+    saveAtBatInput(lineIdx, atBatIdx); // 一度保存
     let nextLine = lineIdx + 1;
-    let nextAtBat = atBatIdx;
-    if (nextLine >= currentGameForScore.lineup.length) { nextLine = 0; nextAtBat++; }
-    if (nextAtBat >= currentAtBatColumns) currentAtBatColumns++;
-    renderAtBatMatrix(); 
-    openAtBatInput(nextLine, nextAtBat);
+    if (nextLine >= currentGameForScore.lineup.length) nextLine = 0;
+
+    if (currentGameForScore.atBatViewMode === 'paper') {
+        let existingIdx = (currentGameForScore.lineup[nextLine].results || []).findIndex(r => r.inning === targetInning);
+        openAtBatInput(nextLine, existingIdx === -1 ? null : existingIdx, targetInning);
+    } else {
+        let nextAtBat = (atBatIdx === null) ? 0 : atBatIdx;
+        if (nextLine === 0) nextAtBat++;
+        if (nextAtBat >= currentAtBatColumns) currentAtBatColumns++;
+        openAtBatInput(nextLine, nextAtBat, null);
+    }
 }
 
+// 🌟 修正：イニング順に並び替える処理を含む保存関数たち
 function saveAtBatInput(lineIdx, atBatIdx) {
     if (!checkAdmin()) return;
-    currentGameForScore.lineup[lineIdx].results[atBatIdx] = { 
+    let inningVal = Number(document.getElementById('ab-inning').value);
+    let newData = { 
         result: document.getElementById('ab-result').value, 
         rbi: Number(document.getElementById('ab-rbi').value), 
-        steal: Number(document.getElementById('ab-steal').value) 
+        runs: Number(document.getElementById('ab-runs').value), 
+        steal: Number(document.getElementById('ab-steal').value),
+        inning: inningVal
     };
+
+    if (atBatIdx === null) {
+        currentGameForScore.lineup[lineIdx].results.push(newData);
+    } else {
+        currentGameForScore.lineup[lineIdx].results[atBatIdx] = newData;
+    }
+    currentGameForScore.lineup[lineIdx].results.sort((a, b) => (a.inning || 1) - (b.inning || 1)); // イニング順に自動整理
     saveAndRefreshGames();
     renderAtBatMatrix(); 
 }
 
 function clearAtBatInput(lineIdx, atBatIdx) {
     if (!checkAdmin()) return;
-    currentGameForScore.lineup[lineIdx].results[atBatIdx] = { result: "", rbi: 0, steal: 0 };
+    if (atBatIdx !== null) {
+        // 紙方式で空欄にした場合は、データそのものを削除して詰める
+        currentGameForScore.lineup[lineIdx].results.splice(atBatIdx, 1); 
+    }
     saveAndRefreshGames();
     renderAtBatMatrix();
 }
@@ -1698,8 +1813,8 @@ function renderStatsPage() {
     const playerStats = {};
     const pitcherStats = {};
     players.forEach(p => {
-        playerStats[p.id] = { name: p.name, number: p.number === "無" ? "-" : p.number, games: 0, pa: 0, ab: 0, hits: 0, hr: 0, rbi: 0, sb: 0, bb: 0, so: 0 };
-        pitcherStats[p.id] = { name: p.name, number: p.number === "無" ? "-" : p.number, games: 0, outs: 0, er: 0, so: 0, bb: 0 };
+        playerStats[p.id] = { name: p.name, number: p.number === "無" ? "-" : p.number, games: 0, pa: 0, ab: 0, hits: 0, hr: 0, rbi: 0, runs: 0, sb: 0, bb: 0, so: 0 };
+        pitcherStats[p.id] = { name: p.name, number: p.number === "無" ? "-" : p.number, games: 0, outs: 0, hits: 0, er: 0, so: 0, bb: 0 };
     });
 
     targetGames.forEach(g => {
@@ -1713,6 +1828,7 @@ function renderStatsPage() {
                     playedInGame = true;
                     playerStats[pid].pa++; 
                     playerStats[pid].rbi += (res.rbi || 0); 
+                    playerStats[pid].runs += (res.runs || 0); // 🌟 追加
                     playerStats[pid].sb += (res.steal || 0);
                     const r = res.result;
                     if (['単打', '二塁打', '三塁打', '本塁打'].includes(r)) {
@@ -1734,6 +1850,7 @@ function renderStatsPage() {
                 if (!pid || !pitcherStats[pid]) return;
                 pitcherStats[pid].games++;
                 pitcherStats[pid].outs += (parseInt(item.innings) || 0) * 3 + (parseInt(item.outs) || 0);
+                pitcherStats[pid].hits += (parseInt(item.hits) || 0); // 🌟 追加
                 pitcherStats[pid].er += (parseInt(item.er) || 0);
                 pitcherStats[pid].so += (parseInt(item.so) || 0);
                 pitcherStats[pid].bb += (parseInt(item.bb) || 0);
@@ -1773,10 +1890,10 @@ function renderStatsPage() {
         <div class="table-container">
             <table>
                 <thead>
-                    <tr><th>背番</th><th class="th-left">氏名</th><th>打率</th><th>試合</th><th>打席</th><th>打数</th><th>安打</th><th>本塁打</th><th>打点</th><th>盗塁</th><th>四死球</th><th>三振</th></tr>
+                    <tr><th>背番</th><th class="th-left">氏名</th><th>打率</th><th>試合</th><th>打席</th><th>打数</th><th>安打</th><th>本塁打</th><th>打点</th><th>得点</th><th>盗塁</th><th>四死球</th><th>三振</th></tr>
                 </thead>
                 <tbody>
-                    ${bStatsArray.map(s => `<tr><td>${s.number}</td><td class="td-left-bold">${s.name}</td><td class="td-highlight-green">${s.avg}</td><td>${s.games}</td><td>${s.pa}</td><td>${s.ab}</td><td>${s.hits}</td><td>${s.hr}</td><td>${s.rbi}</td><td>${s.sb}</td><td>${s.bb}</td><td>${s.so}</td></tr>`).join('')}
+                    ${bStatsArray.map(s => `<tr><td>${s.number}</td><td class="td-left-bold">${s.name}</td><td class="td-highlight-green">${s.avg}</td><td>${s.games}</td><td>${s.pa}</td><td>${s.ab}</td><td>${s.hits}</td><td>${s.hr}</td><td>${s.rbi}</td><td>${s.runs}</td><td>${s.sb}</td><td>${s.bb}</td><td>${s.so}</td></tr>`).join('')}
                 </tbody>
             </table>
         </div>
@@ -1789,9 +1906,9 @@ function renderStatsPage() {
         html += `
             <div class="table-container">
                 <table>
-                    <thead><tr><th>背番</th><th class="th-left">氏名</th><th>防御率</th><th>登板</th><th>投球回</th><th>自責点</th><th>奪三振</th><th>四死球</th></tr></thead>
+                    <thead><tr><th>背番</th><th class="th-left">氏名</th><th>防御率</th><th>登板</th><th>投球回</th><th>被安打</th><th>自責点</th><th>奪三振</th><th>四死球</th></tr></thead>
                     <tbody>
-                        ${pStatsArray.map(s => `<tr><td>${s.number}</td><td class="td-left-bold">${s.name}</td><td class="td-highlight-blue">${s.era}</td><td>${s.games}</td><td>${s.ipDisplay}</td><td>${s.er}</td><td>${s.so}</td><td>${s.bb}</td></tr>`).join('')}
+                        ${pStatsArray.map(s => `<tr><td>${s.number}</td><td class="td-left-bold">${s.name}</td><td class="td-highlight-blue">${s.era}</td><td>${s.games}</td><td>${s.ipDisplay}</td><td>${s.hits}</td><td>${s.er}</td><td>${s.so}</td><td>${s.bb}</td></tr>`).join('')}
                     </tbody>
                 </table>
             </div>
