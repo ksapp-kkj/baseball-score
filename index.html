@@ -1,293 +1,199 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>シンプル家計簿</title>
-
-  <link rel="icon" href="icon.png?v=2">
-  <link rel="apple-touch-icon" href="icon.png?v=2">
-  <meta name="apple-mobile-web-app-title" content="家計簿">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
-
-  <link href="https://fonts.googleapis.com/css2?family=Space+Mono&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚾️野球スコア管理アプリ</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="apple-touch-icon" href="icon.png?v=1">
 </head>
 <body>
 
-  <!-- 1. ログイン画面 -->
-  <div id="screen-login" class="app-screen active">
-    <div class="app-container container-sm">
-      <h2>家計簿ログイン</h2>
-      
-      <div id="login-form-area">
-        <form id="login-form">
-          <div class="input-group">
-            <label>メールアドレス</label>
-            <input type="email" id="login-email" required>
-          </div>
-          <div class="input-group">
-            <label>パスワード</label>
-            <input type="password" id="login-password" required>
-          </div>
-          <button type="submit" class="action-btn">ログイン</button>
-        </form>
+    <div id="login-screen" class="app-screen active">
+        <div class="login-wrapper">
+            <h2>⚾️野球スコア管理 <span class="help-trigger" onclick="showHelpModal('login')">❓使い方</span></h2>
+            
+            <div id="login-form-container" class="card mt-20">
+                <h3 class="mb-15 color-grass">ログイン</h3>
+                <div class="form-group">
+                    <input type="email" id="login-email-input" class="w-100 mb-10" placeholder="メールアドレス">
+                </div>
+                <div class="form-group">
+                    <input type="password" id="login-password-input" class="w-100 mb-15" placeholder="パスワード">
+                </div>
+                
+                <button class="btn-add w-100 p-10 mb-15" onclick="loginAccount()">ログイン</button>
+                
+                <hr class="modal-hr">
+                
+                <p class="help-text mb-10">はじめての方はこちら</p>
+                <button class="btn-small-action btn-small-orange w-100 p-10" onclick="showRegisterForm()">新規アカウント登録</button>
+                
+                <div class="mt-15-center">
+                    <button onclick="resetPassword()" class="btn-reset-password">パスワードを忘れた場合</button>
+                </div>
+            </div>
+
+            <div id="register-form-container" class="card mt-20 hidden">
+                <h3 class="mb-15 color-orange">新規アカウント登録</h3>
+                <div class="form-group">
+                    <input type="email" id="register-email-input" class="w-100 mb-10" placeholder="メールアドレス">
+                </div>
+                <div class="form-group">
+                    <input type="password" id="register-password-input" class="w-100 mb-10" placeholder="パスワード (6文字以上)">
+                </div>
+                <div class="form-group">
+                    <input type="text" id="register-name-input" class="w-100 mb-15" placeholder="あなたの表示名（ニックネーム）">
+                </div>
+                
+                <button class="btn-small-action btn-small-orange w-100 p-10 mb-15 text-lg" onclick="registerAccount()">登録して始める</button>
+                
+                <hr class="modal-hr">
+                
+                <button class="btn-small-action btn-small-gray w-100 p-10" onclick="showLoginForm()">ログイン画面に戻る</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="mypage-screen" class="app-screen">
+        <div class="mypage-wrapper">
+            <div class="list-header">
+                <h2>マイページ</h2>
+                <button class="btn-edit-mode" onclick="logout()">ログアウト</button>
+            </div>
+            
+            <h3 class="mt-20 mb-10">所属チーム一覧</h3>
+            <div id="user-team-list" class="card">
+                <p class="empty-message">読み込み中...</p>
+            </div>
+
+            <button class="btn-add w-100 mt-20 p-10" onclick="showCreateTeamModal()">＋ 新しいチームを作成する</button>
+
+            <hr class="dashed-hr">
+            <h3 class="mb-10">既存のチームに参加する</h3>
+            <p class="help-text mb-10">監督から共有された「招待ID」を入力してください。</p>
+            <div class="flex-gap-8">
+                <input type="text" id="join-team-id" class="input-box" placeholder="招待IDを入力">
+                <button class="btn-join" onclick="joinTeam()">参加</button>
+            </div>
+
+            <div class="edit-name-wrapper">
+                <label class="edit-name-label">あなたの表示名（ニックネーム）:</label>
+                <div class="flex-gap-8 mt-5">
+                    <input type="text" id="edit-username-input" class="input-box" placeholder="表示名（未設定）">
+                    <button class="btn-update-name" onclick="updateUserName()">変更</button>
+                </div>
+                <p class="help-text-small mt-5">※チームのメンバー管理画面には、ここで設定した名前が表示されます。</p>
+            </div>
+
+            <div class="delete-wrapper">
+                <button class="btn-delete-account" onclick="deleteAccount()">アカウントを完全に削除する（退会）</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="main-app-screen" class="app-screen">
         
-        <div class="register-prompt">
-          <p class="register-prompt-text">はじめての方はこちら</p>
-          <button id="show-register-btn" class="action-btn m-0 btn-orange">新規アカウント作成</button>
-        </div>
-      </div>
-      
-      <div id="register-form-area" class="hidden">
-        <form id="register-form">
-          <div class="input-group">
-            <label>メールアドレス</label>
-            <input type="email" id="register-email" required>
-          </div>
-          <div class="input-group">
-            <label>パスワード (6文字以上)</label>
-            <input type="password" id="register-password" required>
-          </div>
-          <button type="submit" class="action-btn btn-dark">登録して始める</button>
-        </form>
-        <div class="login-back-prompt">
-          <button id="show-login-btn" class="text-link">ログイン画面に戻る</button>
-        </div>
-      </div>
-    </div>
-  </div>
+        <header class="app-header">
+            <div id="current-team-display" class="header-team-name">チーム名未定</div>
+            <button class="btn-back-mypage" onclick="backToMyPage()">マイページへ戻る</button>
+        </header>
 
-  <!-- 2. マイページ画面 -->
-  <div id="screen-mypage" class="app-screen hidden">
-    <div class="app-container container-md">
-      <div class="page-header">
-        <h2 class="page-title">マイページ</h2>
-        <button id="logout-btn" class="edit-btn">ログアウト</button>
-      </div>
-
-      <div class="settings-block-split">
-        <div class="settings-col">
-          <h4>新しい家計簿を作る</h4>
-          <form id="create-book-form" class="inline-form">
-            <input type="text" id="new-book-name" class="flex-input" placeholder="例：家庭用" required>
-            <button type="submit" class="action-btn m-0 btn-inline">作成</button>
-          </form>
-        </div>
-        <div class="settings-col">
-          <h4>共有された家計簿に参加</h4>
-          <form id="join-book-form" class="inline-form">
-            <input type="text" id="join-book-id" class="flex-input font-mono" placeholder="招待コードを入力" required>
-            <button type="submit" class="action-btn m-0 btn-inline btn-dark">参加</button>
-          </form>
-        </div>
-      </div>
-
-      <div class="settings-block mt-30">
-        <h4>あなたの家計簿一覧</h4>
-        <ul id="book-list"></ul>
-      </div>
-
-      <!-- ★修正：プロフィール（ニックネーム）設定を一番下に移動 -->
-      <div class="settings-block profile-setting-block">
-        <h4>プロフィール設定</h4>
-        <form id="profile-form" class="inline-form">
-          <input type="text" id="nickname-input" class="flex-input" placeholder="あなたのニックネーム" required>
-          <button type="submit" class="action-btn m-0 btn-inline btn-dark">保存</button>
-        </form>
-        <p class="helper-text">※ここで設定した名前が家族の画面にも表示されます。</p>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- 3. 家計簿メイン画面 -->
-  <div id="screen-kakeibo" class="app-screen hidden">
-    <div class="app-container container-lg">
-      <header>
-        <div class="kakeibo-header-bar">
-          <button id="back-to-mypage-btn" class="text-link">← マイページに戻る</button>
-          <div class="header-right-block">
-            <span id="current-book-name-display" class="current-book-badge"></span>
-            <!-- 家計簿内のヘッダーには参加者リストを維持 -->
-            <div id="current-book-members-display" class="header-members-text"></div>
-          </div>
-        </div>
-        <h2>家計簿システム</h2>
-        <nav>
-          <button id="nav-record" class="active">支出記録</button>
-          <button id="nav-summary">集計</button>
-          <button id="nav-settings">設定・管理</button>
+        <nav id="main-nav">
+            <div class="nav-menu">
+                <div class="nav-item active" data-target="team-page">チーム情報</div>
+                <div class="nav-item" data-target="game-page">試合情報</div>
+                <div class="nav-item" data-target="stats-page">成績</div>
+            </div>
         </nav>
-      </header>
 
-      <!-- 支出記録タブ -->
-      <section id="view-record" class="record-layout">
-        <div class="form-area">
-          <form id="kakeibo-form">
-            <div class="input-group">
-              <label>日付</label>
-              <input type="date" id="date" required>
-            </div>
-            <div class="input-group">
-              <label>分類</label>
-              <select id="record-type" required>
-                <option value="変動費">変動費</option>
-                <option value="固定費">固定費</option>
-              </select>
-            </div>
-            <div class="input-group">
-              <label>カテゴリ</label>
-              <select id="category" required></select>
-            </div>
-            <div class="input-group">
-              <label>金額</label>
-              <input type="number" id="amount" placeholder="0" required>
-            </div>
-            <div class="input-group">
-              <label>メモ（任意）</label>
-              <input type="text" id="memo" placeholder="備考など">
-            </div>
-            <button type="submit" id="submit-btn" class="action-btn">記録を保存</button>
-          </form>
-        </div>
-        
-        <div class="list-area">
-          <div class="list-header">
-            <h4>記録一覧</h4>
-            <input type="month" id="record-month">
-          </div>
-          <ul id="record-list"></ul>
-        </div>
-      </section>
+        <main>
+            <section id="team-page" class="content-section active">
+                <h2>チーム情報 <span class="help-trigger" onclick="showHelpModal('team')">❓使い方</span></h2>
+                
+                <button id="manage-members-btn" class="btn-manage-members hidden" onclick="showMemberManagementModal()">👥 チームメンバーと権限の管理</button>
 
-      <!-- 集計タブ -->
-      <section id="view-summary" class="hidden">
-        <div class="summary-header">
-          <h3>集計</h3>
-          <input type="month" id="summary-month">
-        </div>
-        <div class="summary-box">
-          <p>総合計: <strong id="total-amount">0</strong> 円</p>
-          <p>固定費: <span id="total-fixed" class="text-fixed">0</span> 円</p>
-          <p>変動費: <span id="total-variable" class="text-variable">0</span> 円</p>
-        </div>
-        <div class="input-group mt-15">
-          <select id="chart-type">
-            <option value="all">全ての費用内訳</option>
-            <option value="type">固定費・変動費の割合</option>
-            <option value="fixed">固定費の内訳のみ</option>
-            <option value="variable">変動費の内訳のみ</option>
-          </select>
-        </div>
-        <div class="chart-container">
-          <canvas id="category-chart"></canvas>
-        </div>
-        <h4>内訳詳細</h4>
-        <ul id="summary-category-list"></ul>
-      </section>
+                <div class="card">
+                    <h3>基本情報</h3>
+                    <div class="record-badge-wrapper">
+                        <div id="team-record" class="record-badge">0勝 0敗 0分</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>チーム名:</label>
+                        <input type="text" id="team-name-input" placeholder="チーム名">
+                    </div>
+                    <div class="form-group">
+                        <label>監督名:</label>
+                        <input type="text" id="manager-name-input" placeholder="監督名" list="team-members-list">
+                    </div>
+                    <div class="form-group">
+                        <label>主将名:</label>
+                        <input type="text" id="captain-name-input" placeholder="主将名" list="team-members-list">
+                    </div>
+                    <datalist id="team-members-list"></datalist>
+                </div>
 
-      <!-- 設定・管理タブ -->
-      <section id="view-settings" class="hidden">
-        <h3>設定・管理</h3>
-        <div class="settings-block">
-          <h4>カテゴリ追加・編集</h4>
-          <form id="category-form">
-            <input type="text" id="new-category" placeholder="名称" required>
-            <select id="new-category-type" required>
-              <option value="変動費">変動費</option>
-              <option value="固定費">固定費</option>
-            </select>
-            <button type="submit" id="category-submit-btn" class="action-btn">追加</button>
-          </form>
-          <div class="category-groups">
-            <details class="category-details" open>
-              <summary class="group-title-variable">変動費</summary>
-              <ul id="category-list-variable"></ul>
-            </details>
-            <details class="category-details" open>
-              <summary class="group-title-fixed">固定費</summary>
-              <ul id="category-list-fixed"></ul>
-            </details>
-          </div>
-        </div>
-      </section>
+                <div class="list-header">
+                    <h3>選手一覧</h3>
+                    <button class="btn-add admin-only" onclick="showAddPlayerModal()">選手登録</button>
+                </div>
+                
+                <div id="player-list-container"></div>
+
+                <div class="card mt-20 team-id-card" onclick="copyTeamId()">
+                    <h3>チーム招待ID</h3>
+                    <p class="help-text mb-10">新しくメンバーを招待する際はこのIDを共有してください。</p>
+                    <div id="team-id-display" class="team-id-box">
+                        </div>
+                </div>
+
+            </section>
+
+            <section id="game-page" class="content-section">
+                <div class="mb-15">
+                    <h2 class="mb-10">試合管理 <span class="help-trigger" onclick="showHelpModal('game')">❓使い方</span></h2>
+                    <div class="flex-gap-8 w-100">
+                        <button class="btn-small-edit flex-1 admin-only" id="toggle-delete-btn" onclick="toggleDeleteMode()">編集</button>
+                        <button class="btn-add flex-1 admin-only" onclick="showAddGameModal()">新規試合登録</button>
+                    </div>
+                </div>
+
+                <div class="filter-container">
+                    <label class="filter-label">表示年:</label>
+                    <select id="game-year-select" class="filter-select" onchange="changeGameYear(this.value)">
+                        <option value="all">通算</option>
+                    </select>
+                </div>
+                
+                <div id="game-list-container">
+                    <p class="empty-message">試合が登録されていません</p>
+                </div>
+            </section>
+
+            <section id="stats-page" class="content-section">
+                <h2>成績 <span class="help-trigger" onclick="showHelpModal('stats')">❓使い方</span></h2>
+                
+                <div class="card">
+                    <p>個人成績・チーム統計は現在準備中です。</p>
+                </div>
+            </section>
+        </main>
     </div>
-  </div>
 
-  <!-- 4. モーダル群 -->
-  <div id="daily-modal" class="modal-overlay">
-    <div class="modal-content">
-      <span id="daily-modal-close-btn" class="modal-close-btn">&times;</span>
-      <h3 id="daily-modal-title">○月○日の記録</h3>
-      <div class="modal-body">
-        <ul id="daily-record-list" class="daily-record-list"></ul>
-      </div>
+    <div id="modal-overlay" onclick="closeModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <span class="close-btn" onclick="closeModal()">&times;</span>
+            <h2 id="modal-title">タイトル</h2>
+            <hr>
+            <div id="modal-body"></div>
+        </div>
     </div>
-  </div>
 
-  <div id="detail-modal" class="modal-overlay">
-    <div class="modal-content">
-      <span id="modal-close-btn" class="modal-close-btn">&times;</span>
-      <h3 id="modal-title">記録の詳細</h3>
-      
-      <!-- 閲覧モード -->
-      <div id="modal-view-mode">
-        <div class="modal-body">
-          <table>
-            <tr><th>日付</th><td id="modal-date"></td></tr>
-            <tr><th>分類</th><td id="modal-type"></td></tr>
-            <tr><th>カテゴリ</th><td id="modal-category"></td></tr>
-            <tr><th>金額</th><td id="modal-amount" class="fw-bold"></td></tr>
-            <tr><th>メモ</th><td id="modal-memo"></td></tr>
-          </table>
-        </div>
-        <div class="modal-actions">
-          <button id="modal-edit-btn" class="action-btn">編集する</button>
-          <button id="modal-delete-btn" class="action-btn btn-danger-outline">削除</button>
-        </div>
-      </div>
-
-      <!-- 編集モード -->
-      <div id="modal-edit-mode" class="hidden">
-        <div class="modal-body">
-          <div class="input-group">
-            <label>日付</label>
-            <input type="date" id="modal-edit-date">
-          </div>
-          <div class="input-group">
-            <label>分類</label>
-            <select id="modal-edit-type">
-              <option value="変動費">変動費</option>
-              <option value="固定費">固定費</option>
-            </select>
-          </div>
-          <div class="input-group">
-            <label>カテゴリ</label>
-            <select id="modal-edit-category"></select>
-          </div>
-          <div class="input-group">
-            <label>金額</label>
-            <input type="number" id="modal-edit-amount">
-          </div>
-          <div class="input-group">
-            <label>メモ</label>
-            <input type="text" id="modal-edit-memo">
-          </div>
-        </div>
-        <div class="modal-actions">
-          <button id="modal-cancel-btn" class="action-btn btn-light">キャンセル</button>
-          <button id="modal-save-btn" class="action-btn btn-dark">更新する</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="toast-container" class="toast-container"></div>
-
-  <script type="module" src="script.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+    
+    <script src="script.js"></script>
 </body>
 </html>
