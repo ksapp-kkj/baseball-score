@@ -40,6 +40,19 @@ let isGameDeleteMode = false;
 let unsubscribeTeamSnapshot = null; 
 
 /**
+ * 🌟 セキュリティ対策（XSS防止）
+ */
+function escapeHTML(str) {
+    if (!str) return "";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+/**
  * 🌟 画面切り替えの仕組み
  */
 function showScreen(screenId) {
@@ -208,10 +221,11 @@ async function loadUserTeams() {
             let badge = '';
             if (isGM) { badge = '<span class="admin-badge bg-danger">GM</span>'; } 
             else if (isAdmin) { badge = '<span class="admin-badge admin-badge-orange">管理者</span>'; }
+            const safeTeamName = escapeHTML(data.team_name); // ★ここでフィルターを通す。
             html += `
                 <div class="team-item-wrapper">
-                    <button class="team-select-btn team-select-btn-flex" onclick="selectTeam('${doc.id}', '${data.team_name}')">${data.team_name} ${badge}</button>
-                    <button class="btn-small-action bg-gray btn-leave" onclick="leaveTeam('${doc.id}', '${data.team_name}')">退出</button>
+                    <button class="team-select-btn team-select-btn-flex" onclick="selectTeam('${doc.id}', '${safeTeamName}')">${safeTeamName} ${badge}</button>
+                    <button class="btn-small-action bg-gray btn-leave" onclick="leaveTeam('${doc.id}', '${safeTeamName}')">退出</button>
                 </div>
             `;
         });
@@ -400,10 +414,11 @@ async function showMemberManagementModal() {
                 else actionHtml += `<button class="btn-small-action btn-small-blue" onclick="toggleAdmin('${uid}', true)">管理者にする</button>`;
                 if (iAmGM) actionHtml += `<button class="btn-small-action bg-danger ml-8" onclick="transferGM('${uid}', '${displayName}')">GMを譲渡</button>`;
             }
+            const safeDisplayName = escapeHTML(displayName); // ★ここでフィルターを通す！
             memberListHtml += `
                 <div class="member-list-item">
                     <div>
-                        <div class="member-name-text ${nameClass}">${displayName}</div>
+                        <div class="member-name-text ${nameClass}">${safeDisplayName}</div>
                         ${badgeHtml}
                     </div>
                     <div class="flex-gap-8">${actionHtml}</div>
@@ -600,14 +615,16 @@ function showPlayerDetail(id) {
     const p = players.find(player => String(player.id) === String(id));
     if(!p) return;
     currentEditingPlayerId = String(id);
-    const furiHtml = p.furigana ? `<p class="player-furigana">${p.furigana}</p>` : '';
+    const safeFurigana = escapeHTML(p.furigana);
+    const furiHtml = p.furigana ? `<p class="player-furigana">${safeFurigana}</p>` : '';
     const statusText = p.status || '現役';
+    const safeName = escapeHTML(p.name);
 
     document.getElementById('modal-title').innerText = "選手情報";
     document.getElementById('modal-body').innerHTML = `
         <div class="view-content">
             ${furiHtml}
-            <p><strong>氏名:</strong> ${p.name}</p>
+            <p><strong>氏名:</strong> ${safeName}</p>
             <p><strong>背番号:</strong> ${p.number}</p>
             <p><strong>投打:</strong> ${p.side}</p>
             <p><strong>メイン守備:</strong> ${p.mainPos}</p>
@@ -629,12 +646,12 @@ function showEditForm(id) {
     const suggestedNum = getSuggestedAssistantNumber();
 
     const nameParts = p.name.split(" ");
-    const lastName = nameParts[0] || "";
-    const firstName = nameParts.slice(1).join(" ") || "";
+    const lastName = escapeHTML(nameParts[0] || "");
+    const firstName = escapeHTML(nameParts.slice(1).join(" ") || "");
 
-    const furiParts = (p.furigana || "").split(/[ 　]+/);
-    const furiLast = furiParts[0] || "";
-    const furiFirst = furiParts.slice(1).join(" ") || "";
+    const furiParts = (p.furigana || "").split(/[  ]+/);
+    const furiLast = escapeHTML(furiParts[0] || "");
+    const furiFirst = escapeHTML(furiParts.slice(1).join(" ") || "");
 
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
@@ -790,7 +807,8 @@ function renderPlayerList() {
             `;
             
             sortedGroup.forEach(p => {
-                html += `<tr><td>${p.number}</td><td><span class="name-link" onclick="showPlayerDetail('${p.id}')">${p.name}</span></td><td>${p.side}</td><td>${p.mainPos}</td></tr>`;
+                const safeName = escapeHTML(p.name); // ★ここでフィルターを通す！
+                html += `<tr><td>${p.number}</td><td><span class="name-link" onclick="showPlayerDetail('${p.id}')">${safeName}</span></td><td>${p.side}</td><td>${p.mainPos}</td></tr>`;
             });
             
             html += `
@@ -812,7 +830,10 @@ function renderPlayerList() {
             const numB = (b.number === "無" || b.number === "") ? Infinity : parseFloat(b.number);
             return numA - numB;
         });
-        datalist.innerHTML = sortedAllPlayers.map(p => `<option value="${p.name}"></option>`).join('');
+        datalist.innerHTML = sortedAllPlayers.map(p => {
+            const safeName = escapeHTML(p.name);
+            return `<option value="${safeName}"></option>`;
+        }).join('');
     }
 }
 
@@ -849,11 +870,15 @@ function showAddGameModal(gameId = null) {
     tempParticipants = g.participants ? [...g.participants] : activePlayerIds;
 
     document.getElementById('modal-title').innerText = isEdit ? "試合情報の編集" : "新規試合登録";
+    
+    const safeOpponent = escapeHTML(g.opponent);
+    const safeLocation = escapeHTML(g.location);
+    
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
             <label>試合日:</label> <input type="date" id="g-date" value="${g.date}">
-            <label>対戦相手:</label> <input type="text" id="g-opponent" value="${g.opponent}" placeholder="相手チーム名">
-            <label>球場:</label> <input type="text" id="g-location" value="${g.location}" placeholder="球場名">
+            <label>対戦相手:</label> <input type="text" id="g-opponent" value="${safeOpponent}" placeholder="相手チーム名">
+            <label>球場:</label> <input type="text" id="g-location" value="${safeLocation}" placeholder="球場名">
             <label>天気:</label>
             <select id="g-weather">
                 <option value="晴れ" ${g.weather==='晴れ'?'selected':''}>☀️ 晴れ</option>
@@ -889,7 +914,8 @@ function renderParticipants() {
     players.forEach(p => {
         if (!tempParticipants.includes(String(p.id))) {
             const pStatus = (p.status === "現役" || !p.status) ? "" : ` (${p.status})`;
-            optionsHtml += `<option value="${p.id}">[${p.number === "無" ? "無" : '#' + p.number}] ${p.name}${pStatus}</option>`;
+            const safeName = escapeHTML(p.name);
+            optionsHtml += `<option value="${p.id}">[${p.number === "無" ? "無" : '#' + p.number}] ${safeName}${pStatus}</option>`;
         }
     });
     selectEl.innerHTML = optionsHtml;
@@ -900,7 +926,8 @@ function renderParticipants() {
         listEl.innerHTML = tempParticipants.map(pid => {
             const p = players.find(pl => String(pl.id) === String(pid));
             if (!p) return '';
-            return `<span class="participant-badge">${p.name} <span class="participant-remove admin-only" onclick="removeParticipant('${pid}')">&times;</span></span>`;
+            const safeName = escapeHTML(p.name);
+            return `<span class="participant-badge">${safeName} <span class="participant-remove admin-only" onclick="removeParticipant('${pid}')">&times;</span></span>`;
         }).join('');
     }
 }
@@ -980,6 +1007,8 @@ function renderGameList() {
     const sortedGames = [...targetGames].sort((a, b) => new Date(b.date) - new Date(a.date));
 
     container.innerHTML = sortedGames.map(g => {
+        const safeOpponent = escapeHTML(g.opponent);
+        const safeLocation = escapeHTML(g.location);
         const resultText = g.isFinished ? (g.score.us > g.score.them ? ' (勝)' : g.score.us < g.score.them ? ' (敗)' : ' (分)') : ' (未完了)';
         const weatherIcon = g.weather === '晴れ' ? '☀️' : g.weather === '曇り' ? '☁️' : g.weather === '雨' ? '☔' : '❓';
         const pCount = g.participants ? g.participants.length : 0; 
@@ -989,12 +1018,12 @@ function renderGameList() {
             <div id="game-card-${g.id}" class="game-card accordion-card">
                 <div class="game-accordion-header" onclick="toggleGameAccordion(${g.id})">
                     <div class="game-date-text">📅 ${g.date} (${g.side})</div>
-                    <div class="game-opponent-text">vs ${g.opponent}</div>
+                    <div class="game-opponent-text">vs ${safeOpponent}</div>
                 </div>
                 
                 <div class="game-accordion-body">
                     <div class="game-detail-text">天気: ${g.weather}</div>
-                    <div class="game-detail-text">場所: ${g.location}</div>
+                    <div class="game-detail-text">場所: ${safeLocation}</div>
                     <div class="game-detail-text">参加: ${pCount}名</div>
                     <div class="game-detail-text score-text mt-10">スコア: ${g.score.us} - ${g.score.them}${resultText}</div>
                     
@@ -1059,7 +1088,8 @@ function renderLineupRows() {
                     const isSelectedElsewhere = tempLineup.some((t, i) => i !== index && String(t.playerId) === String(p.id));
                     if (isSelectedElsewhere) return ''; 
                     const pStatus = (p.status === "現役" || !p.status) ? "" : ` (${p.status})`;
-                    return `<option value="${p.id}" ${String(p.id) === String(item.playerId) ? 'selected' : ''}>[${p.number === "無" ? "無" : '#' + p.number}] ${p.name}${pStatus}</option>`;
+                    const safeName = escapeHTML(p.name);
+                    return `<option value="${p.id}" ${String(p.id) === String(item.playerId) ? 'selected' : ''}>[${p.number === "無" ? "無" : '#' + p.number}] ${safeName}${pStatus}</option>`;
                 }).join('')}
             </select>
             <select class="lineup-pos-select" onchange="updateTempLineup(${index}, 'position', this.value)">
@@ -1159,7 +1189,8 @@ function renderPitcherRows() {
                         const isSelected = tempPitchers.some((t, i) => i !== index && String(t.playerId) === String(p.id));
                         if (isSelected) return ''; 
                         const pStatus = (p.status === "現役" || !p.status) ? "" : ` (${p.status})`;
-                        return `<option value="${p.id}" ${String(p.id) === String(item.playerId) ? 'selected' : ''}>[${p.number === "無" ? "無" : '#' + p.number}] ${p.name}${pStatus}</option>`;
+                        const safeName = escapeHTML(p.name);
+                        return `<option value="${p.id}" ${String(p.id) === String(item.playerId) ? 'selected' : ''}>[${p.number === "無" ? "無" : '#' + p.number}] ${safeName}${pStatus}</option>`;
                     }).join('')}
                 </select>
                 ${isAdmin ? `<button class="btn-remove-row admin-only" onclick="removePitcherRow(${index})">✖</button>` : ""}
@@ -1316,6 +1347,7 @@ function renderAtBatMatrix() {
         // ③ マス目にデータを当てはめる
         rowsHtml = g.lineup.map((item, lineIdx) => {
             const pName = players.find(p => String(p.id) === String(item.playerId))?.name || "不明";
+            const safeName = escapeHTML(pName);
             let colsHtml = columns.map(col => {
                 let playerAtBatsInInning = (item.results || []).filter(r => (r.inning || 1) == col.inning);
                 let resData = playerAtBatsInInning[col.cycle]; // その回のN回目の打席を取得
@@ -1331,7 +1363,7 @@ function renderAtBatMatrix() {
                     return `<td class="atbat-cell" onclick="openAtBatInput(${lineIdx}, null, ${col.inning})"></td>`;
                 }
             }).join('');
-            return `<tr><td class="td-center-bold">${lineIdx+1}</td><td class="team-name">${pName}<br><span class="player-pos-sub">${item.position}</span></td>${colsHtml}</tr>`;
+            return `<tr><td class="td-center-bold">${lineIdx+1}</td><td class="team-name">${safeName}<br><span class="player-pos-sub">${item.position}</span></td>${colsHtml}</tr>`;
         }).join('');
 
     } else {
@@ -1344,6 +1376,7 @@ function renderAtBatMatrix() {
 
         rowsHtml = g.lineup.map((item, lineIdx) => {
             const pName = players.find(p => String(p.id) === String(item.playerId))?.name || "不明";
+            const safeName = escapeHTML(pName);
             let colsHtml = "";
             for(let atBatIdx=0; atBatIdx<currentAtBatColumns; atBatIdx++) {
                 const resData = item.results[atBatIdx];
@@ -1355,7 +1388,7 @@ function renderAtBatMatrix() {
                 const isFilled = text !== "" ? "filled" : "";
                 colsHtml += `<td class="atbat-cell ${isFilled}" onclick="openAtBatInput(${lineIdx}, ${atBatIdx}, null)">${innBadge}${text}${rbiText}${runText}${stealText}</td>`;
             }
-            return `<tr><td class="td-center-bold">${lineIdx+1}</td><td class="team-name">${pName}<br><span class="player-pos-sub">${item.position}</span></td>${colsHtml}</tr>`;
+            return `<tr><td class="td-center-bold">${lineIdx+1}</td><td class="team-name">${safeName}<br><span class="player-pos-sub">${item.position}</span></td>${colsHtml}</tr>`;
         }).join('');
 
         listModeBtnsHtml = `
@@ -1365,10 +1398,11 @@ function renderAtBatMatrix() {
             </div>`;
     }
 
+    const safeOpponent = escapeHTML(g.opponent);
     document.getElementById('modal-title').innerText = "打席成績の入力";
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
-            <p class="modal-vs-title">vs ${g.opponent}</p>
+            <p class="modal-vs-title">vs ${safeOpponent}</p>
             ${getScoreBannerHtml()}
             ${toggleHtml}
             <p class="help-text mb-10">入力したい打席の枠をタップしてください。</p>
@@ -1531,9 +1565,12 @@ function showScoreInputModal(gameId) {
     const labelClass = isAdmin ? "" : "disabled-label";
 
     document.getElementById('modal-title').innerText = "イニングスコア入力";
+    
+    const safeOpponent = escapeHTML(currentGameForScore.opponent);
+
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
-            <p class="modal-vs-title-lg mb-10">vs ${currentGameForScore.opponent}</p>
+            <p class="modal-vs-title-lg mb-10">vs ${safeOpponent}</p>
             
             <div class="score-nav-btns">
                 <button class="btn-jump-stats" onclick="jumpFromScoreTo('atbat', ${gameId})">打席成績へ</button>
@@ -1893,8 +1930,11 @@ function renderStatsPage() {
                     <tr><th>背番</th><th class="th-left">氏名</th><th>打率</th><th>試合</th><th>打席</th><th>打数</th><th>安打</th><th>本塁打</th><th>打点</th><th>得点</th><th>盗塁</th><th>四死球</th><th>三振</th></tr>
                 </thead>
                 <tbody>
-                    ${bStatsArray.map(s => `<tr><td>${s.number}</td><td class="td-left-bold">${s.name}</td><td class="td-highlight-green">${s.avg}</td><td>${s.games}</td><td>${s.pa}</td><td>${s.ab}</td><td>${s.hits}</td><td>${s.hr}</td><td>${s.rbi}</td><td>${s.runs}</td><td>${s.sb}</td><td>${s.bb}</td><td>${s.so}</td></tr>`).join('')}
-                </tbody>
+                ${bStatsArray.map(s => {
+                        const safeName = escapeHTML(s.name);
+                        return `<tr><td>${s.number}</td><td class="td-left-bold">${safeName}</td><td class="td-highlight-green">${s.avg}</td><td>${s.games}</td><td>${s.pa}</td><td>${s.ab}</td><td>${s.hits}</td><td>${s.hr}</td><td>${s.rbi}</td><td>${s.runs}</td><td>${s.sb}</td><td>${s.bb}</td><td>${s.so}</td></tr>`;
+                    }).join('')}
+                    </tbody>
             </table>
         </div>
     `;
@@ -1908,7 +1948,10 @@ function renderStatsPage() {
                 <table>
                     <thead><tr><th>背番</th><th class="th-left">氏名</th><th>防御率</th><th>登板</th><th>投球回</th><th>被安打</th><th>自責点</th><th>奪三振</th><th>四死球</th></tr></thead>
                     <tbody>
-                        ${pStatsArray.map(s => `<tr><td>${s.number}</td><td class="td-left-bold">${s.name}</td><td class="td-highlight-blue">${s.era}</td><td>${s.games}</td><td>${s.ipDisplay}</td><td>${s.hits}</td><td>${s.er}</td><td>${s.so}</td><td>${s.bb}</td></tr>`).join('')}
+                        ${pStatsArray.map(s => {
+                            const safeName = escapeHTML(s.name);
+                            return `<tr><td>${s.number}</td><td class="td-left-bold">${safeName}</td><td class="td-highlight-blue">${s.era}</td><td>${s.games}</td><td>${s.ipDisplay}</td><td>${s.hits}</td><td>${s.er}</td><td>${s.so}</td><td>${s.bb}</td></tr>`
+                        }).join('')}
                     </tbody>
                 </table>
             </div>
