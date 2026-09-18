@@ -910,8 +910,15 @@ function renderParticipants() {
     const selectEl = document.getElementById('g-participant-select');
     const listEl = document.getElementById('g-participants-list');
 
+    // 🌟 追加：選手を背番号順に並べ替える（「無」は一番最後に）
+    const sortedPlayers = [...players].sort((a, b) => {
+        const numA = (a.number === "無" || a.number === "") ? Infinity : parseFloat(a.number);
+        const numB = (b.number === "無" || b.number === "") ? Infinity : parseFloat(b.number);
+        return numA - numB;
+    });
+
     let optionsHtml = `<option value="">-- 追加する選手を選択 --</option>`;
-    players.forEach(p => {
+    sortedPlayers.forEach(p => { // ← players を sortedPlayers に変更
         if (!tempParticipants.includes(String(p.id))) {
             const pStatus = (p.status === "現役" || !p.status) ? "" : ` (${p.status})`;
             const safeName = escapeHTML(p.name);
@@ -923,12 +930,13 @@ function renderParticipants() {
     if (tempParticipants.length === 0) {
         listEl.innerHTML = '<span class="empty-participants">参加者がいません</span>';
     } else {
-        listEl.innerHTML = tempParticipants.map(pid => {
-            const p = players.find(pl => String(pl.id) === String(pid));
-            if (!p) return '';
-            const safeName = escapeHTML(p.name);
-            return `<span class="participant-badge">${safeName} <span class="participant-remove admin-only" onclick="removeParticipant('${pid}')">&times;</span></span>`;
-        }).join('');
+        // 🌟 選択済みの参加者バッジも背番号順に並べて表示する
+        listEl.innerHTML = sortedPlayers // ← ここも sortedPlayers を使う
+            .filter(p => tempParticipants.includes(String(p.id)))
+            .map(p => {
+                const safeName = escapeHTML(p.name);
+                return `<span class="participant-badge">${safeName} <span class="participant-remove admin-only" onclick="removeParticipant('${p.id}')">&times;</span></span>`;
+            }).join('');
     }
 }
 
@@ -1077,14 +1085,26 @@ function showLineupModal(gameId) {
 function renderLineupRows() {
     const wrapper = document.getElementById('lineup-wrapper');
     wrapper.innerHTML = "";
+
+    // 🌟 追加：選手を背番号順に並べ替える
+    const sortedPlayers = [...players].sort((a, b) => {
+        const numA = (a.number === "無" || a.number === "") ? Infinity : parseFloat(a.number);
+        const numB = (b.number === "無" || b.number === "") ? Infinity : parseFloat(b.number);
+        return numA - numB;
+    });
+
     tempLineup.forEach((item, index) => {
         const row = document.createElement('div');
         row.className = "lineup-row";
+        
+        // 🌟 1〜9番（index 0〜8）までは✖ボタンを非表示にする
+        const removeBtnHtml = index >= 9 ? `<button class="btn-remove-row admin-only" onclick="removeLineupRow(${index})">✖</button>` : ``;
+
         row.innerHTML = `
             <span class="lineup-order">${index + 1}.</span>
             <select class="lineup-player-select" onchange="updateTempLineup(${index}, 'playerId', this.value)">
                 <option value="">-- 選手 --</option>
-                ${players.map(p => {
+                ${sortedPlayers.map(p => { // ← players を sortedPlayers に変更
                     const isSelectedElsewhere = tempLineup.some((t, i) => i !== index && String(t.playerId) === String(p.id));
                     if (isSelectedElsewhere) return ''; 
                     const pStatus = (p.status === "現役" || !p.status) ? "" : ` (${p.status})`;
@@ -1102,7 +1122,7 @@ function renderLineupRows() {
                     return `<option value="${pos}" ${pos === item.position ? 'selected' : ''}>${pos}</option>`;
                 }).join('')}
             </select>
-            <button class="btn-remove-row admin-only" onclick="removeLineupRow(${index})">✖</button>
+            ${removeBtnHtml}
         `;
         wrapper.appendChild(row);
     });
@@ -1129,11 +1149,16 @@ function showPitcherModal(gameId) {
     document.getElementById('modal-title').innerText = `投手成績 (vs ${currentGameForScore.opponent})`;
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
-            ${getScoreBannerHtml()}
             <p class="help-text mb-10">登板した投手の成績を入力してください。</p>
             <div id="pitcher-wrapper"></div>
             <button class="btn-small-action btn-small-green mt-10 admin-only" onclick="addPitcherRow()">＋ 投手を登録</button>
-            <div class="modal-btns"><button class="btn-save admin-only" onclick="savePitchers()">投手成績を保存</button></div>
+            <div class="modal-btns">
+                <button class="btn-save admin-only" onclick="savePitchers()">投手成績を保存</button>
+            </div>
+            
+            <div class="mt-20">
+                ${getScoreBannerHtml()}
+            </div>
         </div>
     `;
     renderPitcherRows();
@@ -1267,7 +1292,7 @@ function getScoreBannerHtml() {
             <div class="current-score-text">
                 ${leftName} <span class="score-highlight">${leftScore} - ${rightScore}</span> ${rightName}
             </div>
-            <button class="btn-jump-score" onclick="showScoreInputModal(${g.id})">
+            <button class="btn-jump-score" onclick="jumpToScoreBoard(${g.id})">
                 スコアボードを開く
             </button>
         </div>
@@ -1403,7 +1428,6 @@ function renderAtBatMatrix() {
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
             <p class="modal-vs-title">vs ${safeOpponent}</p>
-            ${getScoreBannerHtml()}
             ${toggleHtml}
             <p class="help-text mb-10">入力したい打席の枠をタップしてください。</p>
             <div class="score-table-container">
@@ -1413,7 +1437,13 @@ function renderAtBatMatrix() {
                 </table>
             </div>
             ${listModeBtnsHtml}
-            <div class="modal-btns mt-15"><button class="btn-save bg-gray" onclick="closeModal();">閉じる</button></div>
+            <div class="modal-btns mt-15">
+                <button class="btn-save bg-gray" onclick="closeModal();">閉じる</button>
+            </div>
+            
+            <div class="mt-20">
+                ${getScoreBannerHtml()}
+            </div>
         </div>
     `;
     document.getElementById('modal-overlay').style.display = 'flex';
@@ -1452,8 +1482,6 @@ function openAtBatInput(lineIdx, atBatIdx, targetInning) {
     document.getElementById('modal-title').innerText = titleText;
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
-            ${getScoreBannerHtml()}
-            
             <div class="flex-gap-8 mt-10">
                 <div class="flex-1"><label>イニング:</label>
                     <select id="ab-inning" class="large-select w-100">
@@ -1478,6 +1506,7 @@ function openAtBatInput(lineIdx, atBatIdx, targetInning) {
                     <select id="ab-steal" class="large-select w-100">${[0,1,2,3,4].map(n => `<option value="${n}" ${Number(currentRes.steal) === n ? 'selected' : ''}>${n}</option>`).join('')}</select>
                 </div>
             </div>
+            
             <div class="modal-btns mt-20">
                 <div class="atbat-nav-btns">
                     <button class="btn-save-blue btn-save bg-blue" onclick="saveAndPrevAtBat(${lineIdx}, ${isNewInPaper ? 'null' : atBatIdx}, ${currentRes.inning})">⬅ 前の打者</button>
@@ -1486,6 +1515,10 @@ function openAtBatInput(lineIdx, atBatIdx, targetInning) {
                 <button class="btn-save-green btn-save bg-green" onclick="saveAtBatInput(${lineIdx}, ${isNewInPaper ? 'null' : atBatIdx})">決定して表に戻る</button>
                 <button class="btn-delete bg-danger" onclick="clearAtBatInput(${lineIdx}, ${isNewInPaper ? 'null' : atBatIdx})">この打席を空欄にする</button>
                 <button class="btn-edit-mode bg-gray" onclick="renderAtBatMatrix()">キャンセル</button>
+            </div>
+            
+            <div class="mt-20">
+                ${getScoreBannerHtml()}
             </div>
         </div>
     `;
@@ -1630,18 +1663,16 @@ function renderScoreBoardTable() {
     // 🌟 閲覧権限の確認
     const isAdmin = currentTeamAdmins.includes(currentUser.uid);
 
-    // 🌟 カウンターを生成する関数（縦型▲▼ボタン版）
+    // 🌟 カウンターを生成する関数（上下配置版に修正！）
     const createCounterHtml = (index, team, value) => {
         const valStr = (value === "" || value === undefined) ? "0" : value;
         if (!isAdmin) return `<span class="score-value">${valStr}</span>`; // 閲覧モード時は数字のみ
 
         return `
-            <div class="score-counter">
-                <span class="score-value">${valStr}</span>
-                <div class="spinner-btns">
-                    <button class="btn-spinner" onclick="adjustInningScore(${index}, '${team}', 1)">▲</button>
-                    <button class="btn-spinner" onclick="adjustInningScore(${index}, '${team}', -1)">▼</button>
-                </div>
+            <div class="score-counter-vertical">
+                <button class="btn-spinner-vertical" onclick="adjustInningScore(${index}, '${team}', 1)">▲</button>
+                <span class="score-value-vertical">${valStr}</span>
+                <button class="btn-spinner-vertical" onclick="adjustInningScore(${index}, '${team}', -1)">▼</button>
             </div>
         `;
     };
@@ -1656,17 +1687,25 @@ function renderScoreBoardTable() {
     const isUsBattingFirst = g.side === "先攻";
     const themSide = isUsBattingFirst ? "後攻" : "先攻";
 
-    // 自チームと相手チームの行HTMLを作成
-    const usRow = `<tr><td class="team-name">自チーム<br><span class="player-pos-sub">(${g.side})</span></td>${usCells}<td id="score-total-us" class="score-total">${totalUs}</td></tr>`;
-    const themRow = `<tr><td class="team-name">相手<br><span class="player-pos-sub">(${themSide})</span></td>${themCells}<td id="score-total-them" class="score-total">${totalThem}</td></tr>`;
+    // 🌟 追加：チーム名の頭文字（1文字目）を取得する
+    const myTeamFull = document.getElementById('team-name-input').value || "自チーム";
+    const myTeamInitial = escapeHTML(myTeamFull.charAt(0));
+    
+    const opponentFull = g.opponent || "相手";
+    const opponentInitial = escapeHTML(opponentFull.charAt(0));
+
+    // 🌟 自チームと相手チームの行HTMLを作成（名前部分を頭文字に変更し、中央揃えに）
+    const usRow = `<tr><td class="team-name" style="text-align:center;">${myTeamInitial}<br><span class="player-pos-sub">(${g.side.charAt(0)})</span></td>${usCells}<td id="score-total-us" class="score-total">${totalUs}</td></tr>`;
+    const themRow = `<tr><td class="team-name" style="text-align:center;">${opponentInitial}<br><span class="player-pos-sub">(${themSide.charAt(0)})</span></td>${themCells}<td id="score-total-them" class="score-total">${totalThem}</td></tr>`;
 
     // 🌟 必ず「先攻」が上（表）、「後攻」が下（裏）になるように並べ替える
     const tbodyHtml = isUsBattingFirst ? (usRow + themRow) : (themRow + usRow);
 
+    // 🌟 一番左上の「チーム」という文字も削ってスペースを節約
     document.getElementById('score-board-wrapper').innerHTML = `
         <div class="score-table-container">
             <table class="score-table">
-                <thead><tr><th class="team-name">チーム</th>${headerHtml}<th>計</th></tr></thead>
+                <thead><tr><th></th>${headerHtml}<th>計</th></tr></thead>
                 <tbody>
                     ${tbodyHtml}
                 </tbody>
@@ -1965,4 +2004,19 @@ function closeModal() {
     if (modal) modal.style.display = 'none';
     currentEditingPlayerId = null;
     currentGameForScore = null;
+}
+
+// 🌟 新規追加：スコアボードへ飛ぶ前に、入力中のデータを自動保存する関数
+function jumpToScoreBoard(gameId) {
+    // 投手成績の画面にいる場合、仮の箱（tempPitchers）の中身を自動で保存する
+    if (document.getElementById('pitcher-wrapper')) {
+        if (currentTeamAdmins.includes(currentUser.uid)) {
+            const filtered = tempPitchers.filter(item => item.playerId !== "");
+            currentGameForScore.pitchers = filtered;
+            saveAndRefreshGames();
+        }
+    }
+    
+    // その後、スコアボードの画面を開く
+    showScoreInputModal(gameId);
 }
