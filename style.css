@@ -1241,3 +1241,18 @@ input[list]::-webkit-calendar-picker-indicator {
 .btn-spinner-vertical:active {
     background: #dcdcdc;
 }
+
+/* 🌟 ローディング画面用のスタイル */
+.loading-wrapper {
+    text-align: center;
+    margin-top: 40vh;
+}
+.loading-icon {
+    font-size: 3rem;
+    margin-bottom: 10px;
+}
+.loading-text {
+    color: var(--grass-green);
+    font-weight: bold;
+    letter-spacing: 2px;
+}
