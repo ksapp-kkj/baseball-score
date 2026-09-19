@@ -15,6 +15,12 @@ const db = firebase.firestore();
 const auth = firebase.auth();
 auth.languageCode = 'ja';
 
+// 🌟 追加：オフラインキャッシュを有効にして、読み込みを爆速にする！
+db.enablePersistence()
+  .catch(function(err) {
+    console.warn("キャッシュの有効化に失敗しました", err);
+  });
+
 /**
  * 🌟 アプリ全体の状態管理
  */
