@@ -42,7 +42,7 @@ let currentRecordYear = "all";
 let currentGameYear = "all"; 
 let tempParticipants = [];
 let tempPitchers = []; 
-let isGameDeleteMode = false; 
+//let isGameDeleteMode = false; 
 let unsubscribeTeamSnapshot = null; 
 
 /**
@@ -853,16 +853,6 @@ function togglePlayerAccordion(index) {
 /**
  * 🌟 試合管理・スコア入力機能
  */
-function toggleDeleteMode() {
-    isGameDeleteMode = !isGameDeleteMode;
-    const btn = document.getElementById('toggle-delete-btn');
-    if (btn) {
-        btn.innerText = isGameDeleteMode ? "完了" : "編集";
-        btn.style.background = isGameDeleteMode ? "#999" : "var(--edit-color)";
-    }
-    renderGameList(); 
-}
-
 function showAddGameModal(gameId = null) {
     const isEdit = gameId !== null;
     
@@ -880,6 +870,16 @@ function showAddGameModal(gameId = null) {
     const safeOpponent = escapeHTML(g.opponent);
     const safeLocation = escapeHTML(g.location);
     
+    // 🌟 追加：編集モードの時だけ、一番下に表示する「削除ボタン」のHTMLを作成
+    const deleteSectionHtml = isEdit ? `
+        <hr class="modal-hr" style="margin: 25px 0 15px 0;">
+        <div style="text-align: center;">
+            <p class="help-text" style="color: var(--danger-color); font-weight: bold; margin-bottom: 5px;">⚠️ 試合の削除</p>
+            <p class="help-text-small mb-10">入力済みの成績データもすべて消去されます。</p>
+            <button class="btn-delete w-100 admin-only" style="padding: 10px;" onclick="deleteGame(${gameId})">この試合を完全に削除する</button>
+        </div>
+    ` : "";
+
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
             <label>試合日:</label> <input type="date" id="g-date" value="${g.date}">
@@ -906,6 +906,9 @@ function showAddGameModal(gameId = null) {
             <div class="modal-btns mt-20">
                 <button class="btn-save admin-only" onclick="processGame(${gameId})">${isEdit ? '変更を保存する' : '試合を作成する'}</button>
             </div>
+            
+            <!-- 🌟 追加：削除ボタンのHTMLをここに挿入 -->
+            ${deleteSectionHtml}
         </div>
     `;
     renderParticipants();
@@ -1024,9 +1027,7 @@ function renderGameList() {
         const safeOpponent = escapeHTML(g.opponent);
         const safeLocation = escapeHTML(g.location);
         const resultText = g.isFinished ? (g.score.us > g.score.them ? ' (勝)' : g.score.us < g.score.them ? ' (敗)' : ' (分)') : ' (未完了)';
-        const weatherIcon = g.weather === '晴れ' ? '☀️' : g.weather === '曇り' ? '☁️' : g.weather === '雨' ? '☔' : '❓';
         const pCount = g.participants ? g.participants.length : 0; 
-        const deleteBtnHtml = isGameDeleteMode ? `<button class="btn-delete-game mt-15 w-100 admin-only" onclick="deleteGame(${g.id})">この試合を削除</button>` : '';
 
         return `
             <div id="game-card-${g.id}" class="game-card accordion-card">
@@ -1041,20 +1042,15 @@ function renderGameList() {
                     <div class="game-detail-text">参加: ${pCount}名</div>
                     <div class="game-detail-text score-text mt-10">スコア: ${g.score.us} - ${g.score.them}${resultText}</div>
                     
-                    <div class="flex-gap-8 mt-15">
-                        <button class="btn-small-action btn-small-blue flex-1 p-10" onclick="showLineupModal(${g.id})">スタメン・打順</button>
-                        <button class="btn-small-action btn-small-gray flex-1 p-10 admin-only" onclick="showAddGameModal(${g.id})">試合情報の編集</button>
-                    </div>
-
-                    <div class="score-action-container mt-10">
+                    <!-- 🌟 インラインスタイルを消してクラス名に変更！ -->
+                    <div class="game-action-btns">
+                        <button class="btn-small-action btn-small-gray w-100 p-10 admin-only" onclick="showAddGameModal(${g.id})">試合情報の編集</button>
+                        <button class="btn-small-action btn-small-blue w-100 p-10" onclick="showLineupModal(${g.id})">スタメン・打順</button>
                         <button class="btn-small-action btn-small-green w-100 p-10" onclick="showScoreInputModal(${g.id})">イニングスコアボード</button>
-                        <div class="flex-gap-8">
-                            <button class="btn-small-action btn-small-orange flex-1 p-10" onclick="showAtBatMatrixModal(${g.id})">打席成績</button>
-                            <button class="btn-small-action btn-small-purple flex-1 p-10" onclick="showPitcherModal(${g.id})">投手成績</button>
-                        </div>
+                        <button class="btn-small-action btn-small-orange w-100 p-10" onclick="showAtBatMatrixModal(${g.id})">打撃成績</button>
+                        <button class="btn-small-action btn-small-purple w-100 p-10" onclick="showPitcherModal(${g.id})">投手成績</button>
                     </div>
                     
-                    ${deleteBtnHtml}
                 </div>
             </div>`;
     }).join('');
@@ -1092,25 +1088,31 @@ function renderLineupRows() {
     const wrapper = document.getElementById('lineup-wrapper');
     wrapper.innerHTML = "";
 
-    // 🌟 追加：選手を背番号順に並べ替える
     const sortedPlayers = [...players].sort((a, b) => {
         const numA = (a.number === "無" || a.number === "") ? Infinity : parseFloat(a.number);
         const numB = (b.number === "無" || b.number === "") ? Infinity : parseFloat(b.number);
         return numA - numB;
     });
 
+    // 🌟 追加：当日の参加メンバーのIDリストを取得
+    const participantIds = currentGameForScore.participants || [];
+
     tempLineup.forEach((item, index) => {
         const row = document.createElement('div');
         row.className = "lineup-row";
         
-        // 🌟 1〜9番（index 0〜8）までは✖ボタンを非表示にする
         const removeBtnHtml = index >= 9 ? `<button class="btn-remove-row admin-only" onclick="removeLineupRow(${index})">✖</button>` : ``;
 
         row.innerHTML = `
             <span class="lineup-order">${index + 1}.</span>
             <select class="lineup-player-select" onchange="updateTempLineup(${index}, 'playerId', this.value)">
                 <option value="">-- 選手 --</option>
-                ${sortedPlayers.map(p => { // ← players を sortedPlayers に変更
+                ${sortedPlayers.map(p => {
+                    // 🌟 追加：参加メンバーに含まれていない（かつ現在選択中ではない）選手はリストに出さない！
+                    if (!participantIds.includes(String(p.id)) && String(p.id) !== String(item.playerId)) {
+                        return '';
+                    }
+
                     const isSelectedElsewhere = tempLineup.some((t, i) => i !== index && String(t.playerId) === String(p.id));
                     if (isSelectedElsewhere) return ''; 
                     const pStatus = (p.status === "現役" || !p.status) ? "" : ` (${p.status})`;
@@ -1155,7 +1157,12 @@ function showPitcherModal(gameId) {
     document.getElementById('modal-title').innerText = `投手成績 (vs ${currentGameForScore.opponent})`;
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
-            <p class="help-text mb-10">登板した投手の成績を入力してください。</p>
+            <!-- 🌟 ここを変更！合計表示用のバッジを追加 -->
+            <div style="display:flex; justify-content:space-between; align-items:center;" class="mb-10">
+                <p class="help-text" style="margin:0;">登板した投手の成績を入力してください。</p>
+                <div id="pitcher-total-outs-badge" style="font-size:0.85rem; font-weight:bold; color:var(--score-blue); background:var(--light-grass); padding:4px 8px; border-radius:4px; border:1px solid #c8e6c9;">合計: 0回 0/3</div>
+            </div>
+
             <div id="pitcher-wrapper"></div>
             <button class="btn-small-action btn-small-green mt-10 admin-only" onclick="addPitcherRow()">＋ 投手を登録</button>
             <div class="modal-btns">
@@ -1178,12 +1185,15 @@ function renderPitcherRows() {
     // 🌟 閲覧権限の確認
     const isAdmin = currentTeamAdmins.includes(currentUser.uid);
 
+    let totalOutsAll = 0; // 🌟 追加：全投手の合計アウト数をカウントする箱
+
     tempPitchers.forEach((item, index) => {
         const row = document.createElement('div');
         row.className = "pitcher-row mb-10";
         
         // 🌟 アウト数から「◯回 ◯/3」を自動計算する
         let currentTotalOuts = (parseInt(item.innings) || 0) * 3 + (parseInt(item.outs) || 0);
+        totalOutsAll += currentTotalOuts; // 🌟 追加：計算したアウト数を足していく
         let innDisp = Math.floor(currentTotalOuts / 3);
         let outDisp = currentTotalOuts % 3;
         let displayOuts = `${innDisp}回 ${outDisp}/3`;
@@ -1236,6 +1246,14 @@ function renderPitcherRows() {
         `;
         wrapper.appendChild(row);
     });
+
+    // 🌟 追加：ループが終わったあとに、画面右上のバッジの数字を更新する
+    const badgeEl = document.getElementById('pitcher-total-outs-badge');
+    if (badgeEl) {
+        let totalInnDisp = Math.floor(totalOutsAll / 3);
+        let totalOutDisp = totalOutsAll % 3;
+        badgeEl.innerText = `合計: ${totalInnDisp}回 ${totalOutDisp}/3`;
+    }
 }
 
 // 🌟 新規追加：＋/－ボタンで投手成績を増減させる関数
@@ -1430,7 +1448,7 @@ function renderAtBatMatrix() {
     }
 
     const safeOpponent = escapeHTML(g.opponent);
-    document.getElementById('modal-title').innerText = "打席成績の入力";
+    document.getElementById('modal-title').innerText = "打撃成績の入力";
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
             <p class="modal-vs-title">vs ${safeOpponent}</p>
@@ -1469,12 +1487,23 @@ function openAtBatInput(lineIdx, atBatIdx, targetInning) {
     const player = players.find(p => String(p.id) === String(item.playerId));
     const pName = player ? player.name : "不明";
     
-    const isNewInPaper = (atBatIdx === null); // 紙方式の空セルをクリックしたか判定
+    const isNewInPaper = (atBatIdx === null);
     
-    // 直前の打者のイニングを推測してアシストする関数
+    // 🌟 修正：直前の打者のイニングを推測してアシストする関数（打順のループに対応！）
     const guessInning = () => {
-        if (item.results.length > 0) return item.results[item.results.length - 1].inning || 1;
-        if (lineIdx > 0 && g.lineup[lineIdx - 1].results.length > 0) return g.lineup[lineIdx - 1].results[g.lineup[lineIdx - 1].results.length - 1].inning || 1;
+        let prevLineIdx = lineIdx - 1;
+        // 1番バッター（index 0）の前の打者は、ラストバッターにする
+        if (prevLineIdx < 0) prevLineIdx = g.lineup.length - 1;
+        
+        if (g.lineup[prevLineIdx] && g.lineup[prevLineIdx].results.length > 0) {
+            // 直前の打者の最新打席のイニングを返す
+            return g.lineup[prevLineIdx].results[g.lineup[prevLineIdx].results.length - 1].inning || 1;
+        }
+
+        // もし直前の打者にデータがなければ、自分自身の過去の打席を参考にする
+        if (item.results.length > 0) {
+            return item.results[item.results.length - 1].inning || 1;
+        }
         return 1;
     };
 
@@ -1543,7 +1572,9 @@ function saveAndPrevAtBat(lineIdx, atBatIdx, targetInning) {
         let prevAtBat = (atBatIdx === null) ? 0 : atBatIdx;
         if (prevLine === currentGameForScore.lineup.length - 1) prevAtBat--;
         if (prevAtBat < 0) { alert("これより前の打席はありません。"); renderAtBatMatrix(); return; }
-        openAtBatInput(prevLine, prevAtBat, null);
+        
+        // 🌟 修正：nullではなく targetInning を渡して、今の回を引き継ぐ
+        openAtBatInput(prevLine, prevAtBat, targetInning);
     }
 }
 
@@ -1560,7 +1591,9 @@ function saveAndNextAtBat(lineIdx, atBatIdx, targetInning) {
         let nextAtBat = (atBatIdx === null) ? 0 : atBatIdx;
         if (nextLine === 0) nextAtBat++;
         if (nextAtBat >= currentAtBatColumns) currentAtBatColumns++;
-        openAtBatInput(nextLine, nextAtBat, null);
+        
+        // 🌟 修正：nullではなく targetInning を渡して、今の回を引き継ぐ
+        openAtBatInput(nextLine, nextAtBat, targetInning);
     }
 }
 
@@ -1612,7 +1645,7 @@ function showScoreInputModal(gameId) {
             <p class="modal-vs-title-lg mb-10">vs ${safeOpponent}</p>
             
             <div class="score-nav-btns">
-                <button class="btn-jump-stats" onclick="jumpFromScoreTo('atbat', ${gameId})">打席成績へ</button>
+                <button class="btn-jump-stats" onclick="jumpFromScoreTo('atbat', ${gameId})">打撃成績へ</button>
                 <button class="btn-jump-stats pitcher" onclick="jumpFromScoreTo('pitcher', ${gameId})">投手成績へ</button>
             </div>
 
@@ -1748,10 +1781,15 @@ function saveScoreBoard() {
 
 function deleteGame(id) {
     if (!checkAdmin()) return;
-    if(confirm("試合情報を削除しますか？")) {
+    
+    // 🌟 メッセージを少し分かりやすく変更
+    if(confirm("この試合情報を完全に削除しますか？\n（※入力済みの成績データもすべて消去されます）")) {
         games = games.filter(g => g.id !== id);
         saveAndRefreshGames();
         updateTeamRecord();
+        
+        // 🌟 追加：削除した後にモーダル画面を閉じる
+        closeModal();
     }
 }
 
@@ -1808,7 +1846,7 @@ function showHelpModal(pageId) {
                     
                     <p class="help-section-title text-blue">【2. スコア入力】</p>
                     <p>・<strong>画面遷移：</strong> 成績入力画面の上部に現在のスコアが常時表示され、ボタン一つで「スコアボード」と「成績入力画面」を行き来できます。</p>
-                    <p>・<strong>打席成績：</strong> 「前の打者」「次の打者」ボタンを使えば、画面を閉じずにサクサク入力できます（盗塁の記録に便利です）。</p>
+                    <p>・<strong>打撃成績：</strong> 「前の打者」「次の打者」ボタンを使えば、画面を閉じずにサクサク入力できます（盗塁の記録に便利です）。</p>
                     <p>・<strong>投手成績：</strong> 投球回は「▲▼」ボタンでアウトを記録すると、自動でイニングが繰り上がります。</p>
                     <p>・<strong>スコアボード：</strong> 先攻・後攻が自動連動し、「▲▼」ボタンで直感的に得点を入力できます。</p>
                     
