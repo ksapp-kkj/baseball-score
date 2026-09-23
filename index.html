@@ -161,10 +161,8 @@
             <section id="game-page" class="content-section">
                 <div class="mb-15">
                     <h2 class="mb-10">試合管理 <span class="help-trigger" onclick="showHelpModal('game')">❓使い方</span></h2>
-                    <div class="flex-gap-8 w-100">
-                        <button class="btn-small-edit flex-1 admin-only" id="toggle-delete-btn" onclick="toggleDeleteMode()">編集</button>
-                        <button class="btn-add flex-1 admin-only" onclick="showAddGameModal()">新規試合登録</button>
-                    </div>
+                    <!-- 🌟 編集ボタンを消して、新規登録を全幅ボタンに変更 -->
+                    <button class="btn-add w-100 admin-only p-10" onclick="showAddGameModal()">＋ 新規試合登録</button>
                 </div>
 
                 <div class="filter-container">
