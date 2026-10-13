@@ -1021,7 +1021,14 @@ function renderGameList() {
         return;
     }
 
-    const sortedGames = [...targetGames].sort((a, b) => new Date(b.date) - new Date(a.date));
+    // 🌟 修正：同じ日付なら「作成日時（id）が新しいもの」を上に表示する
+    const sortedGames = [...targetGames].sort((a, b) => {
+        const dateDiff = new Date(b.date) - new Date(a.date);
+        if (dateDiff === 0) {
+            return b.id - a.id; // 日付が同じ場合はID（作成タイムスタンプ）で比較
+        }
+        return dateDiff;
+    });
 
     container.innerHTML = sortedGames.map(g => {
         const safeOpponent = escapeHTML(g.opponent);
@@ -1544,8 +1551,9 @@ function openAtBatInput(lineIdx, atBatIdx, targetInning) {
             
             <div class="modal-btns mt-20">
                 <div class="atbat-nav-btns">
-                    <button class="btn-save-blue btn-save bg-blue" onclick="saveAndPrevAtBat(${lineIdx}, ${isNewInPaper ? 'null' : atBatIdx}, ${currentRes.inning})">⬅ 前の打者</button>
-                    <button class="btn-save-blue btn-save bg-blue" onclick="saveAndNextAtBat(${lineIdx}, ${isNewInPaper ? 'null' : atBatIdx}, ${currentRes.inning})">次の打者 ➡</button>
+                    <!-- 🌟 修正：引数の currentRes.inning を削除 -->
+                    <button class="btn-save-blue btn-save bg-blue" onclick="saveAndPrevAtBat(${lineIdx}, ${isNewInPaper ? 'null' : atBatIdx})">⬅ 前の打者</button>
+                    <button class="btn-save-blue btn-save bg-blue" onclick="saveAndNextAtBat(${lineIdx}, ${isNewInPaper ? 'null' : atBatIdx})">次の打者 ➡</button>
                 </div>
                 <button class="btn-save-green btn-save bg-green" onclick="saveAtBatInput(${lineIdx}, ${isNewInPaper ? 'null' : atBatIdx})">決定して表に戻る</button>
                 <button class="btn-delete bg-danger" onclick="clearAtBatInput(${lineIdx}, ${isNewInPaper ? 'null' : atBatIdx})">この打席を空欄にする</button>
@@ -1559,8 +1567,12 @@ function openAtBatInput(lineIdx, atBatIdx, targetInning) {
     `;
 }
 
-function saveAndPrevAtBat(lineIdx, atBatIdx, targetInning) {
+function saveAndPrevAtBat(lineIdx, atBatIdx) {
     if (!checkAdmin()) return;
+    
+    // 🌟 追加：ボタンを押した瞬間に「画面で選択されているイニング」を取得する
+    const targetInning = Number(document.getElementById('ab-inning').value);
+    
     saveAtBatInput(lineIdx, atBatIdx); // 一度保存
     let prevLine = lineIdx - 1;
     if (prevLine < 0) prevLine = currentGameForScore.lineup.length - 1;
@@ -1573,13 +1585,16 @@ function saveAndPrevAtBat(lineIdx, atBatIdx, targetInning) {
         if (prevLine === currentGameForScore.lineup.length - 1) prevAtBat--;
         if (prevAtBat < 0) { alert("これより前の打席はありません。"); renderAtBatMatrix(); return; }
         
-        // 🌟 修正：nullではなく targetInning を渡して、今の回を引き継ぐ
         openAtBatInput(prevLine, prevAtBat, targetInning);
     }
 }
 
-function saveAndNextAtBat(lineIdx, atBatIdx, targetInning) {
+function saveAndNextAtBat(lineIdx, atBatIdx) {
     if (!checkAdmin()) return;
+    
+    // 🌟 追加：ボタンを押した瞬間に「画面で選択されているイニング」を取得する
+    const targetInning = Number(document.getElementById('ab-inning').value);
+
     saveAtBatInput(lineIdx, atBatIdx); // 一度保存
     let nextLine = lineIdx + 1;
     if (nextLine >= currentGameForScore.lineup.length) nextLine = 0;
@@ -1592,7 +1607,6 @@ function saveAndNextAtBat(lineIdx, atBatIdx, targetInning) {
         if (nextLine === 0) nextAtBat++;
         if (nextAtBat >= currentAtBatColumns) currentAtBatColumns++;
         
-        // 🌟 修正：nullではなく targetInning を渡して、今の回を引き継ぐ
         openAtBatInput(nextLine, nextAtBat, targetInning);
     }
 }
