@@ -1264,3 +1264,8 @@ input[list]::-webkit-calendar-picker-indicator {
     gap: 10px;
     margin-top: 15px;
 }
+
+/* 🌟 スマホでのダブルタップ拡大（ズーム）を防ぎ、タップの反応速度を上げる */
+button, input, select, textarea, .atbat-cell, .game-accordion-header {
+    touch-action: manipulation;
+}
