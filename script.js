@@ -15,7 +15,6 @@ const db = firebase.firestore();
 const auth = firebase.auth();
 auth.languageCode = 'ja';
 
-// 🌟 追加：オフラインキャッシュを有効にして、読み込みを爆速にする！
 db.enablePersistence()
   .catch(function(err) {
     console.warn("キャッシュの有効化に失敗しました", err);
@@ -42,7 +41,6 @@ let currentRecordYear = "all";
 let currentGameYear = "all"; 
 let tempParticipants = [];
 let tempPitchers = []; 
-//let isGameDeleteMode = false; 
 let unsubscribeTeamSnapshot = null; 
 
 /**
@@ -227,7 +225,7 @@ async function loadUserTeams() {
             let badge = '';
             if (isGM) { badge = '<span class="admin-badge bg-danger">GM</span>'; } 
             else if (isAdmin) { badge = '<span class="admin-badge admin-badge-orange">管理者</span>'; }
-            const safeTeamName = escapeHTML(data.team_name); // ★ここでフィルターを通す。
+            const safeTeamName = escapeHTML(data.team_name);
             html += `
                 <div class="team-item-wrapper">
                     <button class="team-select-btn team-select-btn-flex" onclick="selectTeam('${doc.id}', '${safeTeamName}')">${safeTeamName} ${badge}</button>
@@ -420,7 +418,7 @@ async function showMemberManagementModal() {
                 else actionHtml += `<button class="btn-small-action btn-small-blue" onclick="toggleAdmin('${uid}', true)">管理者にする</button>`;
                 if (iAmGM) actionHtml += `<button class="btn-small-action bg-danger ml-8" onclick="transferGM('${uid}', '${displayName}')">GMを譲渡</button>`;
             }
-            const safeDisplayName = escapeHTML(displayName); // ★ここでフィルターを通す！
+            const safeDisplayName = escapeHTML(displayName);
             memberListHtml += `
                 <div class="member-list-item">
                     <div>
@@ -581,7 +579,7 @@ function addPlayer() {
     let furigana = "";
     if (furiLast || furiFirst) {
         furigana = (furiLast + " " + furiFirst).trim();
-        if (!/^[ァ-ヶー・\s　]+$/.test(furigana)) {
+        if (!/^[ァ-ヶー・\s ]+$/.test(furigana)) {
             return alert("エラー：フリガナは「全角カタカナ」のみ入力してください。");
         }
     }
@@ -741,7 +739,7 @@ function updatePlayer() {
     let furigana = "";
     if (furiLast || furiFirst) {
         furigana = (furiLast + " " + furiFirst).trim();
-        if (!/^[ァ-ヶー・\s　]+$/.test(furigana)) {
+        if (!/^[ァ-ヶー・\s ]+$/.test(furigana)) {
             return alert("エラー：フリガナは「全角カタカナ」のみ入力してください。");
         }
     }
@@ -813,7 +811,7 @@ function renderPlayerList() {
             `;
             
             sortedGroup.forEach(p => {
-                const safeName = escapeHTML(p.name); // ★ここでフィルターを通す！
+                const safeName = escapeHTML(p.name);
                 html += `<tr><td>${p.number}</td><td><span class="name-link" onclick="showPlayerDetail('${p.id}')">${safeName}</span></td><td>${p.side}</td><td>${p.mainPos}</td></tr>`;
             });
             
@@ -856,7 +854,11 @@ function togglePlayerAccordion(index) {
 function showAddGameModal(gameId = null) {
     const isEdit = gameId !== null;
     
-    const activePlayerIds = players.filter(p => (p.status || "現役") === "現役").map(p => String(p.id));
+    const activePlayerIds = players.filter(p => {
+        if ((p.status || "現役") !== "現役") return false;
+        if (p.number !== "無" && !isNaN(p.number) && Number(p.number) >= 100) return false;
+        return true; 
+    }).map(p => String(p.id));
 
     const g = isEdit ? games.find(game => game.id === gameId) : {
         date: new Date().toISOString().split('T')[0],
@@ -870,7 +872,6 @@ function showAddGameModal(gameId = null) {
     const safeOpponent = escapeHTML(g.opponent);
     const safeLocation = escapeHTML(g.location);
     
-    // 🌟 追加：編集モードの時だけ、一番下に表示する「削除ボタン」のHTMLを作成
     const deleteSectionHtml = isEdit ? `
         <hr class="modal-hr" style="margin: 25px 0 15px 0;">
         <div style="text-align: center;">
@@ -906,8 +907,6 @@ function showAddGameModal(gameId = null) {
             <div class="modal-btns mt-20">
                 <button class="btn-save admin-only" onclick="processGame(${gameId})">${isEdit ? '変更を保存する' : '試合を作成する'}</button>
             </div>
-            
-            <!-- 🌟 追加：削除ボタンのHTMLをここに挿入 -->
             ${deleteSectionHtml}
         </div>
     `;
@@ -919,7 +918,6 @@ function renderParticipants() {
     const selectEl = document.getElementById('g-participant-select');
     const listEl = document.getElementById('g-participants-list');
 
-    // 🌟 追加：選手を背番号順に並べ替える（「無」は一番最後に）
     const sortedPlayers = [...players].sort((a, b) => {
         const numA = (a.number === "無" || a.number === "") ? Infinity : parseFloat(a.number);
         const numB = (b.number === "無" || b.number === "") ? Infinity : parseFloat(b.number);
@@ -927,7 +925,7 @@ function renderParticipants() {
     });
 
     let optionsHtml = `<option value="">-- 追加する選手を選択 --</option>`;
-    sortedPlayers.forEach(p => { // ← players を sortedPlayers に変更
+    sortedPlayers.forEach(p => { 
         if (!tempParticipants.includes(String(p.id))) {
             const pStatus = (p.status === "現役" || !p.status) ? "" : ` (${p.status})`;
             const safeName = escapeHTML(p.name);
@@ -939,8 +937,7 @@ function renderParticipants() {
     if (tempParticipants.length === 0) {
         listEl.innerHTML = '<span class="empty-participants">参加者がいません</span>';
     } else {
-        // 🌟 選択済みの参加者バッジも背番号順に並べて表示する
-        listEl.innerHTML = sortedPlayers // ← ここも sortedPlayers を使う
+        listEl.innerHTML = sortedPlayers 
             .filter(p => tempParticipants.includes(String(p.id)))
             .map(p => {
                 const safeName = escapeHTML(p.name);
@@ -1021,11 +1018,10 @@ function renderGameList() {
         return;
     }
 
-    // 🌟 修正：同じ日付なら「作成日時（id）が新しいもの」を上に表示する
     const sortedGames = [...targetGames].sort((a, b) => {
         const dateDiff = new Date(b.date) - new Date(a.date);
         if (dateDiff === 0) {
-            return b.id - a.id; // 日付が同じ場合はID（作成タイムスタンプ）で比較
+            return b.id - a.id; 
         }
         return dateDiff;
     });
@@ -1049,7 +1045,6 @@ function renderGameList() {
                     <div class="game-detail-text">参加: ${pCount}名</div>
                     <div class="game-detail-text score-text mt-10">スコア: ${g.score.us} - ${g.score.them}${resultText}</div>
                     
-                    <!-- 🌟 インラインスタイルを消してクラス名に変更！ -->
                     <div class="game-action-btns">
                         <button class="btn-small-action btn-small-gray w-100 p-10 admin-only" onclick="showAddGameModal(${g.id})">試合情報の編集</button>
                         <button class="btn-small-action btn-small-blue w-100 p-10" onclick="showLineupModal(${g.id})">スタメン・打順</button>
@@ -1101,7 +1096,6 @@ function renderLineupRows() {
         return numA - numB;
     });
 
-    // 🌟 追加：当日の参加メンバーのIDリストを取得
     const participantIds = currentGameForScore.participants || [];
 
     tempLineup.forEach((item, index) => {
@@ -1115,7 +1109,6 @@ function renderLineupRows() {
             <select class="lineup-player-select" onchange="updateTempLineup(${index}, 'playerId', this.value)">
                 <option value="">-- 選手 --</option>
                 ${sortedPlayers.map(p => {
-                    // 🌟 追加：参加メンバーに含まれていない（かつ現在選択中ではない）選手はリストに出さない！
                     if (!participantIds.includes(String(p.id)) && String(p.id) !== String(item.playerId)) {
                         return '';
                     }
@@ -1160,11 +1153,10 @@ function showPitcherModal(gameId) {
     currentGameForScore = games.find(g => g.id === gameId);
     if (!currentGameForScore.pitchers) currentGameForScore.pitchers = [];
     tempPitchers = JSON.parse(JSON.stringify(currentGameForScore.pitchers));
-    if (tempPitchers.length === 0) tempPitchers.push({ playerId: "", innings: "", outs: "0", hits: "0", er: "0", so: "0", bb: "0" }); // 🌟 hits を追加
+    if (tempPitchers.length === 0) tempPitchers.push({ playerId: "", innings: "", outs: "0", hits: "0", er: "0", so: "0", bb: "0" }); 
     document.getElementById('modal-title').innerText = `投手成績 (vs ${currentGameForScore.opponent})`;
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
-            <!-- 🌟 ここを変更！合計表示用のバッジを追加 -->
             <div style="display:flex; justify-content:space-between; align-items:center;" class="mb-10">
                 <p class="help-text" style="margin:0;">登板した投手の成績を入力してください。</p>
                 <div id="pitcher-total-outs-badge" style="font-size:0.85rem; font-weight:bold; color:var(--score-blue); background:var(--light-grass); padding:4px 8px; border-radius:4px; border:1px solid #c8e6c9;">合計: 0回 0/3</div>
@@ -1189,24 +1181,20 @@ function renderPitcherRows() {
     const wrapper = document.getElementById('pitcher-wrapper');
     wrapper.innerHTML = "";
     
-    // 🌟 閲覧権限の確認
     const isAdmin = currentTeamAdmins.includes(currentUser.uid);
-
-    let totalOutsAll = 0; // 🌟 追加：全投手の合計アウト数をカウントする箱
+    let totalOutsAll = 0; 
 
     tempPitchers.forEach((item, index) => {
         const row = document.createElement('div');
         row.className = "pitcher-row mb-10";
         
-        // 🌟 アウト数から「◯回 ◯/3」を自動計算する
         let currentTotalOuts = (parseInt(item.innings) || 0) * 3 + (parseInt(item.outs) || 0);
-        totalOutsAll += currentTotalOuts; // 🌟 追加：計算したアウト数を足していく
+        totalOutsAll += currentTotalOuts; 
         let innDisp = Math.floor(currentTotalOuts / 3);
         let outDisp = currentTotalOuts % 3;
         let displayOuts = `${innDisp}回 ${outDisp}/3`;
         if(currentTotalOuts === 0) displayOuts = "0/3";
         
-        // カウンターUIの生成関数
         const createCounter = (label, key, valText, isWide = false) => {
             const wideClass = isWide ? "pitcher-val-wide" : "";
             if (!isAdmin) {
@@ -1254,7 +1242,6 @@ function renderPitcherRows() {
         wrapper.appendChild(row);
     });
 
-    // 🌟 追加：ループが終わったあとに、画面右上のバッジの数字を更新する
     const badgeEl = document.getElementById('pitcher-total-outs-badge');
     if (badgeEl) {
         let totalInnDisp = Math.floor(totalOutsAll / 3);
@@ -1263,11 +1250,9 @@ function renderPitcherRows() {
     }
 }
 
-// 🌟 新規追加：＋/－ボタンで投手成績を増減させる関数
 function adjustPitcherStat(index, key, delta) {
     if (!checkAdmin()) return;
     
-    // 投球回（アウト）の場合は、自動で「イニング」と「アウト」に振り分ける
     if (key === 'outs') {
         let currentTotalOuts = (parseInt(tempPitchers[index].innings) || 0) * 3 + (parseInt(tempPitchers[index].outs) || 0);
         currentTotalOuts += delta;
@@ -1276,7 +1261,6 @@ function adjustPitcherStat(index, key, delta) {
         tempPitchers[index].innings = Math.floor(currentTotalOuts / 3).toString();
         tempPitchers[index].outs = (currentTotalOuts % 3).toString();
     } 
-    // それ以外の項目（自責点・奪三振など）
     else {
         let currentVal = parseInt(tempPitchers[index][key]) || 0;
         currentVal += delta;
@@ -1288,7 +1272,7 @@ function adjustPitcherStat(index, key, delta) {
 
 function updatePitcher(index, key, value) { tempPitchers[index][key] = value; if (key === 'playerId') renderPitcherRows(); }
 function addPitcherRow() { 
-    tempPitchers.push({ playerId: "", innings: "", outs: "0", hits: "0", er: "0", so: "0", bb: "0" }); // 🌟 hits を追加
+    tempPitchers.push({ playerId: "", innings: "", outs: "0", hits: "0", er: "0", so: "0", bb: "0" }); 
     renderPitcherRows(); 
 }
 function removePitcherRow(index) { tempPitchers.splice(index, 1); renderPitcherRows(); }
@@ -1300,7 +1284,6 @@ function savePitchers() {
     closeModal();
 }
 
-// 🌟 修正：先攻が左側、後攻が右側になるように連動させたバナー生成関数
 function getScoreBannerHtml() {
     const g = currentGameForScore;
     if (!g) return '';
@@ -1309,10 +1292,8 @@ function getScoreBannerHtml() {
     let totalUs = g.innings.reduce((sum, inn) => sum + (parseInt(inn.us) || 0), 0);
     let totalThem = g.innings.reduce((sum, inn) => sum + (parseInt(inn.them) || 0), 0);
     
-    // 🌟 先攻・後攻の判定
     const isUsBattingFirst = g.side === "先攻";
 
-    // 🌟 先攻を必ず左側、後攻を必ず右側に配置する
     const leftName = isUsBattingFirst ? "自チーム(先攻)" : "相手(先攻)";
     const rightName = isUsBattingFirst ? "相手(後攻)" : "自チーム(後攻)";
     const leftScore = isUsBattingFirst ? totalUs : totalThem;
@@ -1341,18 +1322,15 @@ function showAtBatMatrixModal(gameId) {
     renderAtBatMatrix();
 }
 
-// 🌟 新規追加：表示モードの切り替えを保存する関数
 function setAtBatView(mode) {
     currentGameForScore.atBatViewMode = mode;
     renderAtBatMatrix();
 }
 
-// 🌟 修正：打者一巡時にイニングのヘッダーセルを結合（colspan）する描画関数
 function renderAtBatMatrix() {
     const g = currentGameForScore;
-    const viewMode = g.atBatViewMode || 'paper'; // デフォルトは紙方式（paper）
+    const viewMode = g.atBatViewMode || 'paper'; 
 
-    // 切り替えスイッチのHTML
     let toggleHtml = `
         <div class="view-toggle-container">
             <button class="btn-toggle ${viewMode === 'paper' ? 'active' : ''}" onclick="setAtBatView('paper')">📄 スコアブック方式 (回ごと)</button>
@@ -1365,10 +1343,8 @@ function renderAtBatMatrix() {
     let listModeBtnsHtml = '';
 
     if (viewMode === 'paper') {
-        // =============== 📄 紙のスコアブック方式 ===============
-        // ① スコアボードの回数と、データ上の最大イニングを比較して列のベースを作る
         let maxInning = Math.max(9, g.innings ? g.innings.length : 9);
-        let cycleMap = {}; // 打者一巡した回数を記録
+        let cycleMap = {}; 
         
         g.lineup.forEach(item => {
             let playerCycles = {};
@@ -1382,16 +1358,14 @@ function renderAtBatMatrix() {
             }
         });
 
-        // ② 列の構成を作成
         let columns = [];
-        let headerColumns = []; // 🌟 ヘッダー結合用にイニングごとの列数を記録する配列
+        let headerColumns = []; 
         for (let i = 1; i <= maxInning; i++) {
             let cycles = cycleMap[i] || 1;
-            headerColumns.push({ inning: i, count: cycles }); // 🌟 結合数（何列分か）を保存
+            headerColumns.push({ inning: i, count: cycles }); 
             for (let c = 0; c < cycles; c++) { columns.push({ inning: i, cycle: c }); }
         }
 
-        // 🌟 修正：同じイニングの列は colspan を使ってセルを結合する
         headerColumns.forEach(col => {
             if (col.count > 1) {
                 headerHtml += `<th colspan="${col.count}">${col.inning}回</th>`;
@@ -1400,16 +1374,15 @@ function renderAtBatMatrix() {
             }
         });
 
-        // ③ マス目にデータを当てはめる
         rowsHtml = g.lineup.map((item, lineIdx) => {
             const pName = players.find(p => String(p.id) === String(item.playerId))?.name || "不明";
             const safeName = escapeHTML(pName);
             let colsHtml = columns.map(col => {
                 let playerAtBatsInInning = (item.results || []).filter(r => (r.inning || 1) == col.inning);
-                let resData = playerAtBatsInInning[col.cycle]; // その回のN回目の打席を取得
+                let resData = playerAtBatsInInning[col.cycle]; 
 
                 if (resData) {
-                    let originalIndex = item.results.indexOf(resData); // 保存用に元のインデックスを特定
+                    let originalIndex = item.results.indexOf(resData); 
                     const text = resData.result || "";
                     const rbiText = resData.rbi > 0 ? `<span class="rbi-text">${resData.rbi}打点</span>` : "";
                     const runText = resData.runs > 0 ? `<span class="runs-text">生還</span>` : "";
@@ -1423,7 +1396,6 @@ function renderAtBatMatrix() {
         }).join('');
 
     } else {
-        // =============== 📝 従来方式 (打席順) ===============
         let maxCols = 5;
         g.lineup.forEach(item => { if (item.results.length >= maxCols) maxCols = item.results.length + 1; });
         currentAtBatColumns = maxCols;
@@ -1486,7 +1458,7 @@ function removeAtBatColumn() {
 }
 function addAtBatColumn() { currentAtBatColumns++; renderAtBatMatrix(); }
 
-// 🌟 修正：イニング情報を組み込んだ入力画面
+// 🌟 修正：余計な「自動推測」を完全に排除し、常に今の回を引き継ぐシンプルで確実なロジックに変更
 function openAtBatInput(lineIdx, atBatIdx, targetInning) {
     if (!currentTeamAdmins.includes(currentUser.uid)) return alert("【閲覧専用モード】\nこの操作は管理者のみ可能です。");
     const g = currentGameForScore;
@@ -1496,25 +1468,18 @@ function openAtBatInput(lineIdx, atBatIdx, targetInning) {
     
     const isNewInPaper = (atBatIdx === null);
     
-    // 🌟 修正：直前の打者のイニングを推測してアシストする関数（打順のループに対応！）
-    const guessInning = () => {
+    // targetInning が渡されていればそれを絶対優先。なければ直前の打者の打席から拾うだけ。
+    let defaultInning = targetInning;
+    if (!defaultInning) {
         let prevLineIdx = lineIdx - 1;
-        // 1番バッター（index 0）の前の打者は、ラストバッターにする
         if (prevLineIdx < 0) prevLineIdx = g.lineup.length - 1;
-        
         if (g.lineup[prevLineIdx] && g.lineup[prevLineIdx].results.length > 0) {
-            // 直前の打者の最新打席のイニングを返す
-            return g.lineup[prevLineIdx].results[g.lineup[prevLineIdx].results.length - 1].inning || 1;
+            defaultInning = g.lineup[prevLineIdx].results[g.lineup[prevLineIdx].results.length - 1].inning || 1;
+        } else {
+            defaultInning = 1;
         }
+    }
 
-        // もし直前の打者にデータがなければ、自分自身の過去の打席を参考にする
-        if (item.results.length > 0) {
-            return item.results[item.results.length - 1].inning || 1;
-        }
-        return 1;
-    };
-
-    let defaultInning = targetInning || guessInning();
     const currentRes = isNewInPaper ? { result: "", rbi: 0, runs: 0, steal: 0, inning: defaultInning } : (item.results[atBatIdx] || { result: "", rbi: 0, runs: 0, steal: 0, inning: defaultInning }); 
 
     const resultOptions = ['', '単打', '二塁打', '三塁打', '本塁打', '四死球', '三振', '内野ゴロ', '内野フライ', '外野フライ', 'エラー出塁', '犠打・犠飛'];
@@ -1551,7 +1516,6 @@ function openAtBatInput(lineIdx, atBatIdx, targetInning) {
             
             <div class="modal-btns mt-20">
                 <div class="atbat-nav-btns">
-                    <!-- 🌟 修正：引数の currentRes.inning を削除 -->
                     <button class="btn-save-blue btn-save bg-blue" onclick="saveAndPrevAtBat(${lineIdx}, ${isNewInPaper ? 'null' : atBatIdx})">⬅ 前の打者</button>
                     <button class="btn-save-blue btn-save bg-blue" onclick="saveAndNextAtBat(${lineIdx}, ${isNewInPaper ? 'null' : atBatIdx})">次の打者 ➡</button>
                 </div>
@@ -1567,51 +1531,52 @@ function openAtBatInput(lineIdx, atBatIdx, targetInning) {
     `;
 }
 
+// 🌟 修正：ボタンを押した瞬間の「回（ドロップダウンの値）」を確実にそのまま引き継ぐ
 function saveAndPrevAtBat(lineIdx, atBatIdx) {
     if (!checkAdmin()) return;
     
-    // 🌟 追加：ボタンを押した瞬間に「画面で選択されているイニング」を取得する
+    // 今画面で表示されている回を必ず取得する
     const targetInning = Number(document.getElementById('ab-inning').value);
     
-    saveAtBatInput(lineIdx, atBatIdx); // 一度保存
+    saveAtBatInput(lineIdx, atBatIdx); 
+    
     let prevLine = lineIdx - 1;
     if (prevLine < 0) prevLine = currentGameForScore.lineup.length - 1;
 
     if (currentGameForScore.atBatViewMode === 'paper') {
         let existingIdx = (currentGameForScore.lineup[prevLine].results || []).findIndex(r => r.inning === targetInning);
-        openAtBatInput(prevLine, existingIdx === -1 ? null : existingIdx, targetInning);
+        openAtBatInput(prevLine, existingIdx === -1 ? null : existingIdx, targetInning); // 推測させず強制的に回を渡す
     } else {
         let prevAtBat = (atBatIdx === null) ? 0 : atBatIdx;
         if (prevLine === currentGameForScore.lineup.length - 1) prevAtBat--;
         if (prevAtBat < 0) { alert("これより前の打席はありません。"); renderAtBatMatrix(); return; }
-        
-        openAtBatInput(prevLine, prevAtBat, targetInning);
+        openAtBatInput(prevLine, prevAtBat, targetInning); // 推測させず強制的に回を渡す
     }
 }
 
+// 🌟 修正：ボタンを押した瞬間の「回（ドロップダウンの値）」を確実にそのまま引き継ぐ
 function saveAndNextAtBat(lineIdx, atBatIdx) {
     if (!checkAdmin()) return;
     
-    // 🌟 追加：ボタンを押した瞬間に「画面で選択されているイニング」を取得する
+    // 今画面で表示されている回を必ず取得する
     const targetInning = Number(document.getElementById('ab-inning').value);
 
-    saveAtBatInput(lineIdx, atBatIdx); // 一度保存
+    saveAtBatInput(lineIdx, atBatIdx); 
+    
     let nextLine = lineIdx + 1;
     if (nextLine >= currentGameForScore.lineup.length) nextLine = 0;
 
     if (currentGameForScore.atBatViewMode === 'paper') {
         let existingIdx = (currentGameForScore.lineup[nextLine].results || []).findIndex(r => r.inning === targetInning);
-        openAtBatInput(nextLine, existingIdx === -1 ? null : existingIdx, targetInning);
+        openAtBatInput(nextLine, existingIdx === -1 ? null : existingIdx, targetInning); // 推測させず強制的に回を渡す
     } else {
         let nextAtBat = (atBatIdx === null) ? 0 : atBatIdx;
         if (nextLine === 0) nextAtBat++;
         if (nextAtBat >= currentAtBatColumns) currentAtBatColumns++;
-        
-        openAtBatInput(nextLine, nextAtBat, targetInning);
+        openAtBatInput(nextLine, nextAtBat, targetInning); // 推測させず強制的に回を渡す
     }
 }
 
-// 🌟 修正：イニング順に並び替える処理を含む保存関数たち
 function saveAtBatInput(lineIdx, atBatIdx) {
     if (!checkAdmin()) return;
     let inningVal = Number(document.getElementById('ab-inning').value);
@@ -1628,7 +1593,7 @@ function saveAtBatInput(lineIdx, atBatIdx) {
     } else {
         currentGameForScore.lineup[lineIdx].results[atBatIdx] = newData;
     }
-    currentGameForScore.lineup[lineIdx].results.sort((a, b) => (a.inning || 1) - (b.inning || 1)); // イニング順に自動整理
+    currentGameForScore.lineup[lineIdx].results.sort((a, b) => (a.inning || 1) - (b.inning || 1)); 
     saveAndRefreshGames();
     renderAtBatMatrix(); 
 }
@@ -1636,7 +1601,6 @@ function saveAtBatInput(lineIdx, atBatIdx) {
 function clearAtBatInput(lineIdx, atBatIdx) {
     if (!checkAdmin()) return;
     if (atBatIdx !== null) {
-        // 紙方式で空欄にした場合は、データそのものを削除して詰める
         currentGameForScore.lineup[lineIdx].results.splice(atBatIdx, 1); 
     }
     saveAndRefreshGames();
@@ -1682,9 +1646,7 @@ function showScoreInputModal(gameId) {
     document.getElementById('modal-overlay').style.display = 'flex';
 }
 
-// 🌟 新規追加：スコアを保存してから他の成績画面へワープする関数
 function jumpFromScoreTo(destination, gameId) {
-    // 管理者の場合のみ、移動前に現在のスコア（合計点・試合終了チェック）を確実に保存する
     if (currentTeamAdmins.includes(currentUser.uid)) {
         const g = currentGameForScore;
         g.score.us = g.innings.reduce((sum, inn) => sum + (parseInt(inn.us) || 0), 0);
@@ -1692,11 +1654,10 @@ function jumpFromScoreTo(destination, gameId) {
         const finishCheckbox = document.getElementById('s-finished');
         if (finishCheckbox) g.isFinished = finishCheckbox.checked;
         
-        saveAndRefreshGames(); // Firebaseに状態を保存
+        saveAndRefreshGames(); 
         updateTeamRecord();
     }
     
-    // 指定された画面へ切り替える
     if (destination === 'atbat') {
         showAtBatMatrixModal(gameId);
     } else if (destination === 'pitcher') {
@@ -1713,13 +1674,11 @@ function renderScoreBoardTable() {
     const g = currentGameForScore;
     const headerHtml = g.innings.map((_, i) => `<th>${i + 1}</th>`).join('');
 
-    // 🌟 閲覧権限の確認
     const isAdmin = currentTeamAdmins.includes(currentUser.uid);
 
-    // 🌟 カウンターを生成する関数（上下配置版に修正！）
     const createCounterHtml = (index, team, value) => {
         const valStr = (value === "" || value === undefined) ? "0" : value;
-        if (!isAdmin) return `<span class="score-value">${valStr}</span>`; // 閲覧モード時は数字のみ
+        if (!isAdmin) return `<span class="score-value">${valStr}</span>`; 
 
         return `
             <div class="score-counter-vertical">
@@ -1736,25 +1695,20 @@ function renderScoreBoardTable() {
     let totalUs = g.innings.reduce((sum, inn) => sum + (parseInt(inn.us) || 0), 0);
     let totalThem = g.innings.reduce((sum, inn) => sum + (parseInt(inn.them) || 0), 0);
 
-    // 🌟 先攻・後攻の判定と行の入れ替え
     const isUsBattingFirst = g.side === "先攻";
     const themSide = isUsBattingFirst ? "後攻" : "先攻";
 
-    // 🌟 追加：チーム名の頭文字（1文字目）を取得する
     const myTeamFull = document.getElementById('team-name-input').value || "自チーム";
     const myTeamInitial = escapeHTML(myTeamFull.charAt(0));
     
     const opponentFull = g.opponent || "相手";
     const opponentInitial = escapeHTML(opponentFull.charAt(0));
 
-    // 🌟 自チームと相手チームの行HTMLを作成（名前部分を頭文字に変更し、中央揃えに）
     const usRow = `<tr><td class="team-name" style="text-align:center;">${myTeamInitial}<br><span class="player-pos-sub">(${g.side.charAt(0)})</span></td>${usCells}<td id="score-total-us" class="score-total">${totalUs}</td></tr>`;
     const themRow = `<tr><td class="team-name" style="text-align:center;">${opponentInitial}<br><span class="player-pos-sub">(${themSide.charAt(0)})</span></td>${themCells}<td id="score-total-them" class="score-total">${totalThem}</td></tr>`;
 
-    // 🌟 必ず「先攻」が上（表）、「後攻」が下（裏）になるように並べ替える
     const tbodyHtml = isUsBattingFirst ? (usRow + themRow) : (themRow + usRow);
 
-    // 🌟 一番左上の「チーム」という文字も削ってスペースを節約
     document.getElementById('score-board-wrapper').innerHTML = `
         <div class="score-table-container">
             <table class="score-table">
@@ -1767,17 +1721,15 @@ function renderScoreBoardTable() {
     `;
 }
 
-// 🌟 新規追加：＋/－ボタンでスコアを増減させる関数
 function adjustInningScore(index, team, delta) {
     if (!checkAdmin()) return;
     const currentVal = parseInt(currentGameForScore.innings[index][team]) || 0;
     let newVal = currentVal + delta;
     
-    // スコアがマイナスにならないようにブロック
     if (newVal < 0) newVal = 0; 
     
     currentGameForScore.innings[index][team] = String(newVal);
-    renderScoreBoardTable(); // 画面を再描画して合計点も更新
+    renderScoreBoardTable(); 
 }
 
 function addInning() { currentGameForScore.innings.push({ us: "", them: "" }); renderScoreBoardTable(); }
@@ -1796,13 +1748,11 @@ function saveScoreBoard() {
 function deleteGame(id) {
     if (!checkAdmin()) return;
     
-    // 🌟 メッセージを少し分かりやすく変更
     if(confirm("この試合情報を完全に削除しますか？\n（※入力済みの成績データもすべて消去されます）")) {
         games = games.filter(g => g.id !== id);
         saveAndRefreshGames();
         updateTeamRecord();
         
-        // 🌟 追加：削除した後にモーダル画面を閉じる
         closeModal();
     }
 }
@@ -1962,7 +1912,7 @@ function renderStatsPage() {
                     playedInGame = true;
                     playerStats[pid].pa++; 
                     playerStats[pid].rbi += (res.rbi || 0); 
-                    playerStats[pid].runs += (res.runs || 0); // 🌟 追加
+                    playerStats[pid].runs += (res.runs || 0); 
                     playerStats[pid].sb += (res.steal || 0);
                     const r = res.result;
                     if (['単打', '二塁打', '三塁打', '本塁打'].includes(r)) {
@@ -1984,7 +1934,7 @@ function renderStatsPage() {
                 if (!pid || !pitcherStats[pid]) return;
                 pitcherStats[pid].games++;
                 pitcherStats[pid].outs += (parseInt(item.innings) || 0) * 3 + (parseInt(item.outs) || 0);
-                pitcherStats[pid].hits += (parseInt(item.hits) || 0); // 🌟 追加
+                pitcherStats[pid].hits += (parseInt(item.hits) || 0); 
                 pitcherStats[pid].er += (parseInt(item.er) || 0);
                 pitcherStats[pid].so += (parseInt(item.so) || 0);
                 pitcherStats[pid].bb += (parseInt(item.bb) || 0);
@@ -2064,9 +2014,7 @@ function closeModal() {
     currentGameForScore = null;
 }
 
-// 🌟 新規追加：スコアボードへ飛ぶ前に、入力中のデータを自動保存する関数
 function jumpToScoreBoard(gameId) {
-    // 投手成績の画面にいる場合、仮の箱（tempPitchers）の中身を自動で保存する
     if (document.getElementById('pitcher-wrapper')) {
         if (currentTeamAdmins.includes(currentUser.uid)) {
             const filtered = tempPitchers.filter(item => item.playerId !== "");
@@ -2075,6 +2023,5 @@ function jumpToScoreBoard(gameId) {
         }
     }
     
-    // その後、スコアボードの画面を開く
     showScoreInputModal(gameId);
 }
