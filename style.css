@@ -1269,3 +1269,36 @@ input[list]::-webkit-calendar-picker-indicator {
 button, input, select, textarea, .atbat-cell, .game-accordion-header {
     touch-action: manipulation;
 }
+
+/* 🌟 JS内のインラインスタイルから統合したクラス */
+.flex-2 {
+    flex: 2 !important;
+}
+.text-center {
+    text-align: center !important;
+}
+.text-danger {
+    color: var(--danger-color) !important;
+}
+.modal-hr-lg {
+    margin: 25px 0 15px 0;
+}
+.delete-warning-title {
+    color: var(--danger-color);
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+.pitcher-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.pitcher-total-badge {
+    font-size: 0.85rem;
+    font-weight: bold;
+    color: var(--score-blue);
+    background: var(--light-grass);
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid #c8e6c9;
+}
