@@ -49,11 +49,11 @@ let unsubscribeTeamSnapshot = null;
 function escapeHTML(str) {
     if (!str) return "";
     return String(str)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#39;");
+        .replace(/&/g, "&" + "amp;")
+        .replace(/</g, "&" + "lt;")
+        .replace(/>/g, "&" + "gt;")
+        .replace(/"/g, "&" + "quot;")
+        .replace(/'/g, "&#" + "39;");
 }
 
 /**
@@ -235,7 +235,7 @@ async function loadUserTeams() {
         });
         listEl.innerHTML = html;
     } catch(e) {
-        listEl.innerHTML = '<p class="empty-message" style="color:red;">読み込みエラーが発生しました。</p>';
+        listEl.innerHTML = '<p class="empty-message text-danger">読み込みエラーが発生しました。</p>';
         console.error(e);
     }
 }
@@ -621,7 +621,6 @@ function showPlayerDetail(id) {
     currentEditingPlayerId = String(id);
     const safeFurigana = escapeHTML(p.furigana);
     const furiHtml = p.furigana ? `<p class="player-furigana">${safeFurigana}</p>` : '';
-    const statusText = p.status || '現役';
     const safeName = escapeHTML(p.name);
 
     document.getElementById('modal-title').innerText = "選手情報";
@@ -696,11 +695,11 @@ function showEditForm(id) {
                 <button class="btn-save admin-only" onclick="updatePlayer()">保存する</button>
             </div>
 
-            <hr class="modal-hr" style="margin: 25px 0 15px 0;">
-            <div style="text-align: center;">
-                <p class="help-text" style="color: var(--danger-color); font-weight: bold; margin-bottom: 5px;">⚠️ 削除の前にご確認ください</p>
+            <hr class="modal-hr modal-hr-lg">
+            <div class="text-center">
+                <p class="help-text delete-warning-title">⚠️ 削除の前にご確認ください</p>
                 <p class="help-text-small mb-10">名前や記録を一切残したくない場合のみ使用してください。通常はステータス「OB・OG」への変更を推奨しています。</p>
-                <button class="btn-delete w-100 admin-only" style="padding: 10px;" onclick="deletePlayer('${id}')">この選手を完全に削除する</button>
+                <button class="btn-delete w-100 p-10 admin-only" onclick="deletePlayer('${id}')">この選手を完全に削除する</button>
             </div>
         </div>
     `;
@@ -873,11 +872,11 @@ function showAddGameModal(gameId = null) {
     const safeLocation = escapeHTML(g.location);
     
     const deleteSectionHtml = isEdit ? `
-        <hr class="modal-hr" style="margin: 25px 0 15px 0;">
-        <div style="text-align: center;">
-            <p class="help-text" style="color: var(--danger-color); font-weight: bold; margin-bottom: 5px;">⚠️ 試合の削除</p>
+        <hr class="modal-hr modal-hr-lg">
+        <div class="text-center">
+            <p class="help-text delete-warning-title">⚠️ 試合の削除</p>
             <p class="help-text-small mb-10">入力済みの成績データもすべて消去されます。</p>
-            <button class="btn-delete w-100 admin-only" style="padding: 10px;" onclick="deleteGame(${gameId})">この試合を完全に削除する</button>
+            <button class="btn-delete w-100 p-10 admin-only" onclick="deleteGame(${gameId})">この試合を完全に削除する</button>
         </div>
     ` : "";
 
@@ -941,7 +940,7 @@ function renderParticipants() {
             .filter(p => tempParticipants.includes(String(p.id)))
             .map(p => {
                 const safeName = escapeHTML(p.name);
-                return `<span class="participant-badge">${safeName} <span class="participant-remove admin-only" onclick="removeParticipant('${p.id}')">&times;</span></span>`;
+                return `<span class="participant-badge">${safeName} <span class="participant-remove admin-only" onclick="removeParticipant('${p.id}')">×</span></span>`;
             }).join('');
     }
 }
@@ -966,6 +965,8 @@ function processGame(gameId) {
     const opponent = document.getElementById('g-opponent').value;
     if(!date || !opponent) return alert("日付と相手名は必須です");
 
+    const existingGame = gameId ? games.find(x => x.id === gameId) : null;
+
     const gameData = {
         id: gameId || Date.now(),
         date: date, opponent: opponent,
@@ -973,11 +974,12 @@ function processGame(gameId) {
         weather: document.getElementById('g-weather').value,
         side: document.getElementById('g-side').value,
         participants: tempParticipants,
-        score: gameId ? games.find(x => x.id === gameId).score : { us: 0, them: 0 },
-        innings: gameId ? games.find(x => x.id === gameId).innings : Array(9).fill().map(() => ({ us: "", them: "" })),
-        lineup: gameId ? (games.find(x => x.id === gameId).lineup || []) : [],
-        pitchers: gameId ? (games.find(x => x.id === gameId).pitchers || []) : [], 
-        isFinished: gameId ? games.find(x => x.id === gameId).isFinished : false
+        score: existingGame ? existingGame.score : { us: 0, them: 0 },
+        innings: existingGame ? existingGame.innings : Array(9).fill().map(() => ({ us: "", them: "" })),
+        lineup: existingGame ? (existingGame.lineup || []) : [],
+        pitchers: existingGame ? (existingGame.pitchers || []) : [], 
+        atBatViewMode: existingGame ? (existingGame.atBatViewMode || 'paper') : 'paper',
+        isFinished: existingGame ? existingGame.isFinished : false
     };
 
     if (gameId) {
@@ -1157,9 +1159,9 @@ function showPitcherModal(gameId) {
     document.getElementById('modal-title').innerText = `投手成績 (vs ${currentGameForScore.opponent})`;
     document.getElementById('modal-body').innerHTML = `
         <div class="edit-form">
-            <div style="display:flex; justify-content:space-between; align-items:center;" class="mb-10">
-                <p class="help-text" style="margin:0;">登板した投手の成績を入力してください。</p>
-                <div id="pitcher-total-outs-badge" style="font-size:0.85rem; font-weight:bold; color:var(--score-blue); background:var(--light-grass); padding:4px 8px; border-radius:4px; border:1px solid #c8e6c9;">合計: 0回 0/3</div>
+            <div class="pitcher-header-row mb-10">
+                <p class="help-text">登板した投手の成績を入力してください。</p>
+                <div id="pitcher-total-outs-badge" class="pitcher-total-badge">合計: 0回 0/3</div>
             </div>
 
             <div id="pitcher-wrapper"></div>
@@ -1315,6 +1317,7 @@ function showAtBatMatrixModal(gameId) {
     currentGameForScore = games.find(g => g.id === gameId);
     const g = currentGameForScore;
     if (!g.lineup || g.lineup.length === 0) return alert("先に「試合情報」タブからスタメン・打順を設定してください。");
+    if (!g.atBatViewMode) g.atBatViewMode = 'paper';
     g.lineup.forEach(item => { if (!item.results) item.results = []; });
     let maxCols = 5;
     g.lineup.forEach(item => { if (item.results.length >= maxCols) maxCols = item.results.length + 1; });
@@ -1458,17 +1461,16 @@ function removeAtBatColumn() {
 }
 function addAtBatColumn() { currentAtBatColumns++; renderAtBatMatrix(); }
 
-// 🌟 修正：余計な「自動推測」を完全に排除し、常に今の回を引き継ぐシンプルで確実なロジックに変更
 function openAtBatInput(lineIdx, atBatIdx, targetInning) {
     if (!currentTeamAdmins.includes(currentUser.uid)) return alert("【閲覧専用モード】\nこの操作は管理者のみ可能です。");
     const g = currentGameForScore;
+    const viewMode = g.atBatViewMode || 'paper';
     const item = g.lineup[lineIdx];
     const player = players.find(p => String(p.id) === String(item.playerId));
     const pName = player ? player.name : "不明";
     
     const isNewInPaper = (atBatIdx === null);
     
-    // targetInning が渡されていればそれを絶対優先。なければ直前の打者の打席から拾うだけ。
     let defaultInning = targetInning;
     if (!defaultInning) {
         let prevLineIdx = lineIdx - 1;
@@ -1480,11 +1482,13 @@ function openAtBatInput(lineIdx, atBatIdx, targetInning) {
         }
     }
 
-    const currentRes = isNewInPaper ? { result: "", rbi: 0, runs: 0, steal: 0, inning: defaultInning } : (item.results[atBatIdx] || { result: "", rbi: 0, runs: 0, steal: 0, inning: defaultInning }); 
+    const currentRes = isNewInPaper
+        ? { result: "", rbi: 0, runs: 0, steal: 0, inning: defaultInning }
+        : (item.results[atBatIdx] || { result: "", rbi: 0, runs: 0, steal: 0, inning: defaultInning }); 
 
     const resultOptions = ['', '単打', '二塁打', '三塁打', '本塁打', '四死球', '三振', '内野ゴロ', '内野フライ', '外野フライ', 'エラー出塁', '犠打・犠飛'];
     
-    let titleText = g.atBatViewMode === 'paper' ? `【${currentRes.inning}回】 ${pName}` : `第${atBatIdx+1}打席: ${pName}`;
+    let titleText = viewMode === 'paper' ? `【${currentRes.inning}回】 ${pName}` : `第${atBatIdx+1}打席: ${pName}`;
 
     document.getElementById('modal-title').innerText = titleText;
     document.getElementById('modal-body').innerHTML = `
@@ -1495,7 +1499,7 @@ function openAtBatInput(lineIdx, atBatIdx, targetInning) {
                         ${[1,2,3,4,5,6,7,8,9,10,11,12].map(n => `<option value="${n}" ${Number(currentRes.inning) === n ? 'selected' : ''}>${n}回</option>`).join('')}
                     </select>
                 </div>
-                <div class="flex-1" style="flex: 2;"><label>結果:</label>
+                <div class="flex-2"><label>結果:</label>
                     <select id="ab-result" class="large-select w-100">
                         ${resultOptions.map(opt => `<option value="${opt}" ${currentRes.result === opt ? 'selected' : ''}>${opt === '' ? '-- 選択 --' : opt}</option>`).join('')}
                     </select>
@@ -1531,49 +1535,57 @@ function openAtBatInput(lineIdx, atBatIdx, targetInning) {
     `;
 }
 
-// 🌟 修正：ボタンを押した瞬間の「回（ドロップダウンの値）」を確実にそのまま引き継ぐ
 function saveAndPrevAtBat(lineIdx, atBatIdx) {
     if (!checkAdmin()) return;
     
-    // 今画面で表示されている回を必ず取得する
     const targetInning = Number(document.getElementById('ab-inning').value);
+    const viewMode = currentGameForScore.atBatViewMode || 'paper';
     
-    saveAtBatInput(lineIdx, atBatIdx); 
+    const currentResultVal = document.getElementById('ab-result').value;
+    if (atBatIdx !== null || currentResultVal !== "") {
+        saveAtBatInput(lineIdx, atBatIdx);
+    }
     
     let prevLine = lineIdx - 1;
     if (prevLine < 0) prevLine = currentGameForScore.lineup.length - 1;
+    const prevResults = currentGameForScore.lineup[prevLine].results || [];
 
-    if (currentGameForScore.atBatViewMode === 'paper') {
-        let existingIdx = (currentGameForScore.lineup[prevLine].results || []).findIndex(r => r.inning === targetInning);
-        openAtBatInput(prevLine, existingIdx === -1 ? null : existingIdx, targetInning); // 推測させず強制的に回を渡す
+    if (viewMode === 'paper') {
+        let existingIdx = -1;
+        for (let i = prevResults.length - 1; i >= 0; i--) {
+            if (Number(prevResults[i].inning) === targetInning) {
+                existingIdx = i;
+                break;
+            }
+        }
+        openAtBatInput(prevLine, existingIdx === -1 ? null : existingIdx, targetInning);
     } else {
-        let prevAtBat = (atBatIdx === null) ? 0 : atBatIdx;
-        if (prevLine === currentGameForScore.lineup.length - 1) prevAtBat--;
-        if (prevAtBat < 0) { alert("これより前の打席はありません。"); renderAtBatMatrix(); return; }
-        openAtBatInput(prevLine, prevAtBat, targetInning); // 推測させず強制的に回を渡す
+        let prevAtBat = prevResults.length > 0 ? prevResults.length - 1 : 0;
+        openAtBatInput(prevLine, prevAtBat, targetInning);
     }
 }
 
-// 🌟 修正：ボタンを押した瞬間の「回（ドロップダウンの値）」を確実にそのまま引き継ぐ
 function saveAndNextAtBat(lineIdx, atBatIdx) {
     if (!checkAdmin()) return;
     
-    // 今画面で表示されている回を必ず取得する
     const targetInning = Number(document.getElementById('ab-inning').value);
+    const viewMode = currentGameForScore.atBatViewMode || 'paper';
 
-    saveAtBatInput(lineIdx, atBatIdx); 
+    const currentResultVal = document.getElementById('ab-result').value;
+    if (atBatIdx !== null || currentResultVal !== "") {
+        saveAtBatInput(lineIdx, atBatIdx);
+    }
     
     let nextLine = lineIdx + 1;
     if (nextLine >= currentGameForScore.lineup.length) nextLine = 0;
+    const nextResults = currentGameForScore.lineup[nextLine].results || [];
 
-    if (currentGameForScore.atBatViewMode === 'paper') {
-        let existingIdx = (currentGameForScore.lineup[nextLine].results || []).findIndex(r => r.inning === targetInning);
-        openAtBatInput(nextLine, existingIdx === -1 ? null : existingIdx, targetInning); // 推測させず強制的に回を渡す
+    if (viewMode === 'paper') {
+        openAtBatInput(nextLine, null, targetInning);
     } else {
-        let nextAtBat = (atBatIdx === null) ? 0 : atBatIdx;
-        if (nextLine === 0) nextAtBat++;
-        if (nextAtBat >= currentAtBatColumns) currentAtBatColumns++;
-        openAtBatInput(nextLine, nextAtBat, targetInning); // 推測させず強制的に回を渡す
+        let nextAtBat = nextResults.length;
+        if (nextAtBat >= currentAtBatColumns) currentAtBatColumns = nextAtBat + 1;
+        openAtBatInput(nextLine, nextAtBat, targetInning);
     }
 }
 
@@ -1704,8 +1716,8 @@ function renderScoreBoardTable() {
     const opponentFull = g.opponent || "相手";
     const opponentInitial = escapeHTML(opponentFull.charAt(0));
 
-    const usRow = `<tr><td class="team-name" style="text-align:center;">${myTeamInitial}<br><span class="player-pos-sub">(${g.side.charAt(0)})</span></td>${usCells}<td id="score-total-us" class="score-total">${totalUs}</td></tr>`;
-    const themRow = `<tr><td class="team-name" style="text-align:center;">${opponentInitial}<br><span class="player-pos-sub">(${themSide.charAt(0)})</span></td>${themCells}<td id="score-total-them" class="score-total">${totalThem}</td></tr>`;
+    const usRow = `<tr><td class="team-name text-center">${myTeamInitial}<br><span class="player-pos-sub">(${g.side.charAt(0)})</span></td>${usCells}<td id="score-total-us" class="score-total">${totalUs}</td></tr>`;
+    const themRow = `<tr><td class="team-name text-center">${opponentInitial}<br><span class="player-pos-sub">(${themSide.charAt(0)})</span></td>${themCells}<td id="score-total-them" class="score-total">${totalThem}</td></tr>`;
 
     const tbodyHtml = isUsBattingFirst ? (usRow + themRow) : (themRow + usRow);
 
