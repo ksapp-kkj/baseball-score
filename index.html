@@ -121,6 +121,17 @@
             <section id="team-page" class="content-section active">
                 <h2>チーム情報 <span class="help-trigger" onclick="showHelpModal('team')">❓使い方</span></h2>
                 
+                <!-- 🌟 追加：お試し版専用の権限シミュレーター（初期はhiddenで非表示） -->
+                <div id="local-role-simulator" class="card danger-border mb-15 hidden">
+                    <h3 class="mb-10" style="color: var(--danger-color);">🔧 権限シミュレーター</h3>
+                    <p class="help-text mb-10">テストチーム内でのあなたの権限を変更し、他メンバーからの見え方をテストできます。</p>
+                    <div class="flex-gap-8">
+                        <button class="btn-small-action bg-danger flex-1" onclick="changeLocalRole('GM')">GM</button>
+                        <button class="btn-small-action bg-orange flex-1" onclick="changeLocalRole('Admin')">管理者</button>
+                        <button class="btn-small-action bg-gray flex-1" onclick="changeLocalRole('Member')">一般(閲覧)</button>
+                    </div>
+                </div>
+                
                 <button id="manage-members-btn" class="btn-manage-members hidden" onclick="showMemberManagementModal()">👥 チームメンバーと権限の管理</button>
 
                 <div class="card">
