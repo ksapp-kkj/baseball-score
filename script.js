@@ -353,6 +353,10 @@ async function selectTeam(teamId, teamName) {
     if (idDisplay) {
         idDisplay.innerHTML = `<span class="team-id-text">${teamId}</span><br><span class="team-id-subtext">(タップでコピー)</span>`;
     }
+    
+    // 🌟 修正：通常のチームではシミュレーターを隠す
+    const roleSimulator = document.getElementById('local-role-simulator');
+    if (roleSimulator) roleSimulator.classList.add('hidden');
 
     if (unsubscribeTeamSnapshot) {
         unsubscribeTeamSnapshot();
@@ -2170,15 +2174,18 @@ function createTestTeam(isSilent = false) {
     loadUserTeams();
 }
 
-// 🌟 追加：ローカルテストチームを開く処理
+// 🌟 ローカルテストチームを開く処理
 function selectLocalTestTeam() {
     isLocalTestTeam = true;
     currentTeamId = 'local-test-team';
-    currentTeamAdmins = [currentUser ? currentUser.uid : "local_user"];
+    const localUid = currentUser ? currentUser.uid : "local_user";
 
     const localDataStr = localStorage.getItem('baseball_test_team_data');
     if (!localDataStr) return;
     const data = JSON.parse(localDataStr);
+
+    // 🌟 修正：固定ではなくデータに保存された権限配列から判定する
+    currentTeamAdmins = data.admins || [];
 
     document.getElementById('current-team-display').innerText = data.team_name;
     const idDisplay = document.getElementById('team-id-display');
@@ -2189,10 +2196,26 @@ function selectLocalTestTeam() {
     const appScreen = document.getElementById('main-app-screen');
     const modalOverlay = document.getElementById('modal-overlay');
     const manageBtn = document.getElementById('manage-members-btn');
+    const roleSimulator = document.getElementById('local-role-simulator');
 
-    appScreen.classList.remove('viewer-mode');
-    modalOverlay.classList.remove('viewer-mode');
-    if(manageBtn) manageBtn.classList.add('hidden'); 
+    // 🌟 シミュレーターを表示
+    if (roleSimulator) roleSimulator.classList.remove('hidden');
+
+    // 🌟 権限チェック（シミュレーターの変更結果が即座に反映される）
+    if(currentTeamAdmins.includes(localUid)){
+        appScreen.classList.remove('viewer-mode');
+        modalOverlay.classList.remove('viewer-mode');
+        // GMだけメンバー管理ボタンを表示する
+        if(manageBtn) {
+            if(data.owner === localUid) manageBtn.classList.remove('hidden');
+            else manageBtn.classList.add('hidden');
+        }
+    } else {
+        // 閲覧のみ（一般メンバー）の場合
+        appScreen.classList.add('viewer-mode');
+        modalOverlay.classList.add('viewer-mode');
+        if(manageBtn) manageBtn.classList.add('hidden');
+    }
 
     players = data.players || [];
     games = data.games || [];
@@ -2219,4 +2242,31 @@ function deleteLocalTestTeam() {
     if(!confirm("お試し用のテストチームを削除しますか？\n（選手情報・成績データなど、すべて完全に消去されます）")) return;
     localStorage.removeItem('baseball_test_team_data');
     loadUserTeams();
+}
+
+// 🌟 新規追加：テストチーム内の自分の権限を切り替える関数
+function changeLocalRole(role) {
+    const localDataStr = localStorage.getItem('baseball_test_team_data');
+    if (!localDataStr) return;
+    const data = JSON.parse(localDataStr);
+    
+    const localUid = currentUser ? currentUser.uid : "local_user";
+
+    if (role === 'GM') {
+        data.owner = localUid;
+        data.admins = [localUid];
+        alert("あなたの権限を「GM（最高権限）」に変更しました。\nすべての編集や削除が可能です。");
+    } else if (role === 'Admin') {
+        data.owner = "dummy_owner"; // GMではない
+        data.admins = [localUid];
+        alert("あなたの権限を「管理者」に変更しました。\n編集は可能ですが、メンバー管理など一部操作が制限されます。");
+    } else if (role === 'Member') {
+        data.owner = "dummy_owner";
+        data.admins = []; // 管理者ではない
+        alert("あなたの権限を「閲覧のみ（一般メンバー）」に変更しました。\nスコアの閲覧のみ可能で、追加・編集ボタンは非表示（または無効化）になります。");
+    }
+
+    // 変更を保存して画面をリロード
+    localStorage.setItem('baseball_test_team_data', JSON.stringify(data));
+    selectLocalTestTeam();
 }
