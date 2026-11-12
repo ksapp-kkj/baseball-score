@@ -27,6 +27,9 @@ let currentUser = null;
 let currentTeamId = null;
 let currentTeamAdmins = [];
 
+// 🌟 追加：現在ローカルのお試しテストチームを開いているかどうかの判定フラグ
+let isLocalTestTeam = false;
+
 const positionOptions = ["P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH"];
 const lineupPositionOptions = ["P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH", "EH", "ベンチ"];
 
@@ -141,6 +144,10 @@ async function registerAccount() {
         document.getElementById('register-email-input').value = "";
         document.getElementById('register-password-input').value = "";
         document.getElementById('register-name-input').value = "";
+        
+        // 🌟 新規登録直後にテストチームを自動生成する
+        createTestTeam(true);
+
     } catch(error) {
         if (error.code === 'auth/email-already-in-use') {
             alert("このメールアドレスは既に登録されています。「ログイン画面に戻る」を押してログインしてください。");
@@ -211,29 +218,56 @@ async function loadUserTeams() {
     listEl.innerHTML = '<p class="empty-message">読み込み中...</p>';
     try {
         const snapshot = await db.collection("teams").where("members", "array-contains", currentUser.uid).get();
-        if (snapshot.empty) {
-            listEl.innerHTML = '<p class="empty-message">所属しているチームがありません。<br>「新しいチームを作成する」か、「招待ID」を入力してください。</p>';
-            return;
-        }
         let html = '';
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            const admins = data.admins || [];
-            const ownerUid = data.owner || admins[0];
-            const isGM = (currentUser.uid === ownerUid);
-            const isAdmin = admins.includes(currentUser.uid);
-            let badge = '';
-            if (isGM) { badge = '<span class="admin-badge bg-danger">GM</span>'; } 
-            else if (isAdmin) { badge = '<span class="admin-badge admin-badge-orange">管理者</span>'; }
-            const safeTeamName = escapeHTML(data.team_name);
+        
+        // 通常のFirebaseチームの展開
+        if (!snapshot.empty) {
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                const admins = data.admins || [];
+                const ownerUid = data.owner || admins[0];
+                const isGM = (currentUser.uid === ownerUid);
+                const isAdmin = admins.includes(currentUser.uid);
+                let badge = '';
+                if (isGM) { badge = '<span class="admin-badge bg-danger">GM</span>'; } 
+                else if (isAdmin) { badge = '<span class="admin-badge admin-badge-orange">管理者</span>'; }
+                const safeTeamName = escapeHTML(data.team_name);
+                html += `
+                    <div class="team-item-wrapper">
+                        <button class="team-select-btn team-select-btn-flex" onclick="selectTeam('${doc.id}', '${safeTeamName}')">${safeTeamName} ${badge}</button>
+                        <button class="btn-small-action bg-gray btn-leave" onclick="leaveTeam('${doc.id}', '${safeTeamName}')">退出</button>
+                    </div>
+                `;
+            });
+        }
+
+        // 🌟 追加：ローカルのテストチームが存在するか確認し、あればリストの末尾に追加する
+        const localDataStr = localStorage.getItem('baseball_test_team_data');
+        const testTeamBtn = document.getElementById('btn-create-test-team');
+        
+        if (localDataStr) {
+            const localData = JSON.parse(localDataStr);
+            const safeTeamName = escapeHTML(localData.team_name);
+            const badge = '<span class="admin-badge bg-danger">お試し版</span>';
             html += `
-                <div class="team-item-wrapper">
-                    <button class="team-select-btn team-select-btn-flex" onclick="selectTeam('${doc.id}', '${safeTeamName}')">${safeTeamName} ${badge}</button>
-                    <button class="btn-small-action bg-gray btn-leave" onclick="leaveTeam('${doc.id}', '${safeTeamName}')">退出</button>
+                <div class="team-item-wrapper" style="border-top: 2px dashed #ccc; margin-top: 15px; padding-top: 15px;">
+                    <button class="team-select-btn team-select-btn-flex" style="border-color: #ff9800; color: #ff9800;" onclick="selectLocalTestTeam()">${safeTeamName} ${badge}</button>
+                    <button class="btn-small-action bg-danger btn-leave" onclick="deleteLocalTestTeam()">削除</button>
                 </div>
             `;
-        });
-        listEl.innerHTML = html;
+            // テストチームがすでにある場合は「自動生成」ボタンを隠す
+            if (testTeamBtn) testTeamBtn.style.display = 'none';
+        } else {
+            // なければボタンを表示
+            if (testTeamBtn) testTeamBtn.style.display = 'block';
+        }
+
+        if (html === '') {
+            listEl.innerHTML = '<p class="empty-message">所属しているチームがありません。<br>「新しいチームを作成する」か、「招待ID」を入力してください。</p>';
+        } else {
+            listEl.innerHTML = html;
+        }
+
     } catch(e) {
         listEl.innerHTML = '<p class="empty-message text-danger">読み込みエラーが発生しました。</p>';
         console.error(e);
@@ -310,7 +344,9 @@ function copyTeamId() {
     }).catch(err => { alert("コピーに失敗しました。このIDを手動でコピーしてください: " + currentTeamId); });
 }
 
+// 🌟 通常のチーム（Firebase）を選択した時の処理
 async function selectTeam(teamId, teamName) {
+    isLocalTestTeam = false; // クラウドモードON
     currentTeamId = teamId;
     document.getElementById('current-team-display').innerText = teamName;
     const idDisplay = document.getElementById('team-id-display');
@@ -366,6 +402,7 @@ async function selectTeam(teamId, teamName) {
 }
 
 function backToMyPage() {
+    isLocalTestTeam = false; // 戻る時はモードリセット
     if (unsubscribeTeamSnapshot) {
         unsubscribeTeamSnapshot();
         unsubscribeTeamSnapshot = null;
@@ -382,7 +419,7 @@ function backToMyPage() {
  * 🌟 メンバー・権限管理機能
  */
 async function showMemberManagementModal() {
-    if (!currentTeamId) return;
+    if (!currentTeamId || isLocalTestTeam) return;
     document.getElementById('modal-title').innerText = "メンバー情報取得中...";
     document.getElementById('modal-overlay').style.display = 'flex';
     try {
@@ -479,6 +516,15 @@ window.onload = function() {
         if (el) {
             el.addEventListener('change', async (e) => {
                 if (!checkAdmin()) { e.target.value = e.target.defaultValue; return; }
+                
+                // 🌟 チーム名等の編集もローカル/Firebaseで分岐
+                if (isLocalTestTeam) {
+                    updateLocalTestData(field.key, e.target.value);
+                    if(field.key === 'team_name') document.getElementById('current-team-display').innerText = e.target.value;
+                    e.target.defaultValue = e.target.value;
+                    return;
+                }
+
                 if (currentTeamId) {
                     await db.collection("teams").doc(currentTeamId).update({ [field.key]: e.target.value });
                     if(field.key === 'team_name') document.getElementById('current-team-display').innerText = e.target.value;
@@ -1769,20 +1815,40 @@ function deleteGame(id) {
     }
 }
 
+// 🌟 修正：Firebaseへの保存とローカルへの保存を分岐させる
 async function saveAndRefreshPlayers() {
     renderPlayerList(); 
+    if (isLocalTestTeam) {
+        updateLocalTestData('players', players);
+        return;
+    }
     if (currentTeamId) {
         try { await db.collection("teams").doc(currentTeamId).update({ players: players }); } 
         catch(e) { console.error("選手保存エラー", e); }
     }
 }
 
+// 🌟 修正：Firebaseへの保存とローカルへの保存を分岐させる
 async function saveAndRefreshGames() {
     renderGameList();
     renderStatsPage(); 
+    if (isLocalTestTeam) {
+        updateLocalTestData('games', games);
+        return;
+    }
     if (currentTeamId) {
         try { await db.collection("teams").doc(currentTeamId).update({ games: games }); } 
         catch(e) { console.error("試合保存エラー", e); }
+    }
+}
+
+// 🌟 追加：ローカルテストチームのデータを更新する汎用関数
+function updateLocalTestData(key, value) {
+    const localDataStr = localStorage.getItem('baseball_test_team_data');
+    if (localDataStr) {
+        const data = JSON.parse(localDataStr);
+        data[key] = value;
+        localStorage.setItem('baseball_test_team_data', JSON.stringify(data));
     }
 }
 
@@ -2036,4 +2102,121 @@ function jumpToScoreBoard(gameId) {
     }
     
     showScoreInputModal(gameId);
+}
+
+/**
+ * 🌟 テストチーム自動生成・操作機能（ローカルストレージに保存）
+ */
+function createTestTeam(isSilent = false) {
+    if (!isSilent) {
+        if (!confirm("お試し用のテストチームを生成しますか？\n（データはあなたの端末にのみ保存され、クラウドには送信されません）")) return;
+    }
+
+    const baseTime = Date.now();
+    const dummyPlayersData = [
+        { name: "山田 太郎", furigana: "ヤマダ タロウ", number: "1", side: "右投右打", mainPos: "P", subPos: [], status: "現役" },
+        { name: "佐藤 健太", furigana: "サトウ ケンタ", number: "2", side: "右投右打", mainPos: "C", subPos: [], status: "現役" },
+        { name: "鈴木 大輔", furigana: "スズキ ダイスケ", number: "3", side: "右投左打", mainPos: "1B", subPos: [], status: "現役" },
+        { name: "高橋 一輝", furigana: "タカハシ カズキ", number: "4", side: "右投右打", mainPos: "2B", subPos: [], status: "現役" },
+        { name: "伊藤 翔太", furigana: "イトウ ショウタ", number: "5", side: "右投右打", mainPos: "3B", subPos: [], status: "現役" },
+        { name: "渡辺 拓海", furigana: "ワタナベ タクミ", number: "6", side: "右投左打", mainPos: "SS", subPos: [], status: "現役" },
+        { name: "中村 陽向", furigana: "ナカムラ ヒナタ", number: "7", side: "左投左打", mainPos: "LF", subPos: [], status: "現役" },
+        { name: "小林 蒼空", furigana: "コバヤシ ソラ", number: "8", side: "右投右打", mainPos: "CF", subPos: [], status: "現役" },
+        { name: "加藤 蓮", furigana: "カトウ レン", number: "9", side: "左投左打", mainPos: "RF", subPos: [], status: "現役" },
+        { name: "吉田 陸", furigana: "ヨシダ リク", number: "10", side: "右投右打", mainPos: "P", subPos: ["1B"], status: "現役" },
+        { name: "山田 涼平", furigana: "ヤマダ リョウヘイ", number: "11", side: "右投右打", mainPos: "C", subPos: ["OF"], status: "現役" },
+        { name: "佐々木 樹", furigana: "ササキ イツキ", number: "12", side: "右投左打", mainPos: "DH", subPos: [], status: "現役" },
+        { name: "山口 湊", furigana: "ヤマグチ ミナト", number: "13", side: "右投右打", mainPos: "1B", subPos: ["3B"], status: "現役" },
+        { name: "松本 直樹", furigana: "マツモト ナオキ", number: "14", side: "左投左打", mainPos: "P", subPos: [], status: "OB・OG" },
+        { name: "井上 修", furigana: "イノウエ オサム", number: "15", side: "右投右打", mainPos: "CF", subPos: [], status: "活動休止中" }
+    ];
+
+    const formattedPlayers = dummyPlayersData.map((p, index) => {
+        return {
+            id: (baseTime + index).toString() + Math.random().toString(36).substring(2, 9),
+            number: p.number,
+            pastNumbers: [],
+            name: p.name,
+            furigana: p.furigana,
+            side: p.side,
+            mainPos: p.mainPos,
+            subPos: p.subPos,
+            status: p.status,
+            stats: { avg: ".000", hits: 0, ab: 0 }
+        };
+    });
+
+    let userName = "あなた";
+    if (currentUser && document.getElementById('edit-username-input').value) {
+        userName = document.getElementById('edit-username-input').value;
+    }
+
+    const testTeamData = {
+        team_name: `テストチーム（${userName}の練習用）`, 
+        manager_name: "監督ダミー", 
+        captain_name: "主将ダミー",
+        owner: "local_user", 
+        members: ["local_user"], 
+        admins: ["local_user"],  
+        players: formattedPlayers, 
+        games: []
+    };
+
+    localStorage.setItem('baseball_test_team_data', JSON.stringify(testTeamData));
+    
+    if (!isSilent) {
+        alert("お試しチームを作成しました！\nまずは選手一覧を開いてみてください。");
+    }
+    loadUserTeams();
+}
+
+// 🌟 追加：ローカルテストチームを開く処理
+function selectLocalTestTeam() {
+    isLocalTestTeam = true;
+    currentTeamId = 'local-test-team';
+    currentTeamAdmins = [currentUser ? currentUser.uid : "local_user"];
+
+    const localDataStr = localStorage.getItem('baseball_test_team_data');
+    if (!localDataStr) return;
+    const data = JSON.parse(localDataStr);
+
+    document.getElementById('current-team-display').innerText = data.team_name;
+    const idDisplay = document.getElementById('team-id-display');
+    if (idDisplay) {
+        idDisplay.innerHTML = `<span class="team-id-text">お試しモード</span><br><span class="team-id-subtext">(他端末との共有はされません)</span>`;
+    }
+
+    const appScreen = document.getElementById('main-app-screen');
+    const modalOverlay = document.getElementById('modal-overlay');
+    const manageBtn = document.getElementById('manage-members-btn');
+
+    appScreen.classList.remove('viewer-mode');
+    modalOverlay.classList.remove('viewer-mode');
+    if(manageBtn) manageBtn.classList.add('hidden'); 
+
+    players = data.players || [];
+    games = data.games || [];
+    document.getElementById('team-name-input').value = data.team_name;
+    document.getElementById('manager-name-input').value = data.manager_name || "";
+    document.getElementById('captain-name-input').value = data.captain_name || "";
+
+    if (currentGameForScore) {
+        const updatedGame = games.find(g => g.id === currentGameForScore.id);
+        if (updatedGame) {
+            currentGameForScore = updatedGame; 
+        }
+    }
+
+    renderPlayerList();
+    renderGameList();
+    updateTeamRecord();
+    renderStatsPage();
+    showScreen('main-app-screen');
+}
+
+// 🌟 追加：ローカルテストチームを削除する処理
+function deleteLocalTestTeam() {
+    if(!confirm("お試し用のテストチームを削除しますか？\n（選手情報・成績データなど、すべて完全に消去されます）")) return;
+    localStorage.removeItem('baseball_test_team_data');
+    loadUserTeams();
 }
