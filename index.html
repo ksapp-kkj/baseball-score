@@ -77,7 +77,7 @@
 
             <button class="btn-add w-100 mt-20 p-10" onclick="showCreateTeamModal()">＋ 新しいチームを作成する</button>
             
-            <button id="btn-create-test-team" class="btn-save w-100 mt-10 p-10 bg-orange" onclick="createTestTeam()">🔰 テストチーム自動生成<br>（お試し用）</button>
+            <button id="btn-create-test-team" class="btn-save w-100 mt-10 p-10 bg-orange" onclick="createTestTeam()">🔰 テストチーム作成<br>（チュートリアル）</button>
 
             <hr class="dashed-hr">
             <h3 class="mb-10">既存のチームに参加する</h3>
@@ -127,11 +127,11 @@
                     <p class="help-text mb-10">テストチーム内でのあなたの権限を変更し、他メンバーからの見え方をテストできます。</p>
                     <div class="flex-gap-8">
                         <button class="btn-small-action bg-danger flex-1" onclick="changeLocalRole('GM')">GM</button>
-                        <button class="btn-small-action bg-orange flex-1" onclick="changeLocalRole('Admin')">管理者</button>
+                        <button class="btn-small-action bg-blue flex-1" onclick="changeLocalRole('Admin')">管理者</button>
                         <button class="btn-small-action bg-gray flex-1" onclick="changeLocalRole('Member')">一般(閲覧)</button>
                     </div>
                 </div>
-                
+
                 <button id="manage-members-btn" class="btn-manage-members hidden" onclick="showMemberManagementModal()">👥 チームメンバーと権限の管理</button>
 
                 <div class="card">
@@ -162,7 +162,7 @@
                 
                 <div id="player-list-container"></div>
 
-                <div class="card mt-20 team-id-card" onclick="copyTeamId()">
+                <div id="invite-id-card" class="card mt-20 team-id-card" onclick="copyTeamId()">
                     <h3>チーム招待ID</h3>
                     <p class="help-text mb-10">新しくメンバーを招待する際はこのIDを共有してください。</p>
                     <div id="team-id-display" class="team-id-box">
