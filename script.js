@@ -354,9 +354,11 @@ async function selectTeam(teamId, teamName) {
         idDisplay.innerHTML = `<span class="team-id-text">${teamId}</span><br><span class="team-id-subtext">(タップでコピー)</span>`;
     }
     
-    // 🌟 修正：通常のチームではシミュレーターを隠す
     const roleSimulator = document.getElementById('local-role-simulator');
     if (roleSimulator) roleSimulator.classList.add('hidden');
+    
+    const inviteCard = document.getElementById('invite-id-card'); // 🌟 追加
+    if (inviteCard) inviteCard.style.display = 'block'; // 🌟 追加：通常のチームでは招待IDを表示する
 
     if (unsubscribeTeamSnapshot) {
         unsubscribeTeamSnapshot();
@@ -2150,13 +2152,8 @@ function createTestTeam(isSilent = false) {
         };
     });
 
-    let userName = "あなた";
-    if (currentUser && document.getElementById('edit-username-input').value) {
-        userName = document.getElementById('edit-username-input').value;
-    }
-
     const testTeamData = {
-        team_name: `テストチーム（${userName}の練習用）`, 
+        team_name: `テスト`, // 🌟 修正：シンプルに「テスト」のみに変更
         manager_name: "監督ダミー", 
         captain_name: "主将ダミー",
         owner: "local_user", 
@@ -2184,7 +2181,6 @@ function selectLocalTestTeam() {
     if (!localDataStr) return;
     const data = JSON.parse(localDataStr);
 
-    // 🌟 修正：固定ではなくデータに保存された権限配列から判定する
     currentTeamAdmins = data.admins || [];
 
     document.getElementById('current-team-display').innerText = data.team_name;
@@ -2197,21 +2193,19 @@ function selectLocalTestTeam() {
     const modalOverlay = document.getElementById('modal-overlay');
     const manageBtn = document.getElementById('manage-members-btn');
     const roleSimulator = document.getElementById('local-role-simulator');
+    const inviteCard = document.getElementById('invite-id-card'); // 🌟 追加
 
-    // 🌟 シミュレーターを表示
     if (roleSimulator) roleSimulator.classList.remove('hidden');
+    if (inviteCard) inviteCard.style.display = 'none'; // 🌟 追加：テストチームでは招待IDを隠す
 
-    // 🌟 権限チェック（シミュレーターの変更結果が即座に反映される）
     if(currentTeamAdmins.includes(localUid)){
         appScreen.classList.remove('viewer-mode');
         modalOverlay.classList.remove('viewer-mode');
-        // GMだけメンバー管理ボタンを表示する
         if(manageBtn) {
             if(data.owner === localUid) manageBtn.classList.remove('hidden');
             else manageBtn.classList.add('hidden');
         }
     } else {
-        // 閲覧のみ（一般メンバー）の場合
         appScreen.classList.add('viewer-mode');
         modalOverlay.classList.add('viewer-mode');
         if(manageBtn) manageBtn.classList.add('hidden');
