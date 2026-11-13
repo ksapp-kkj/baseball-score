@@ -792,6 +792,8 @@ th {
 .bg-blue { background: var(--score-blue) !important; }
 .bg-green { background: #4caf50 !important; }
 .bg-gray { background: #999 !important; }
+/* 🌟追加：オレンジ色の背景クラス */
+.bg-orange { background: #ff9800 !important; }
 .text-unregistered { color: #999; font-style: italic; }
 .member-email-text { font-size: 0.75rem; color: #999; margin-bottom: 3px; }
 .disabled-label { pointer-events: none; opacity: 0.6; }
@@ -1301,4 +1303,13 @@ button, input, select, textarea, .atbat-cell, .game-accordion-header {
     padding: 4px 8px;
     border-radius: 4px;
     border: 1px solid #c8e6c9;
+}
+
+/* 🌟 選手一覧のアコーディオンを「白背景のカード」にしてタップしやすくする */
+#player-list-container .accordion-card {
+    background-color: #ffffff;
+    border-radius: 10px;
+    padding: 15px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    border: 1px solid var(--border-color);
 }
